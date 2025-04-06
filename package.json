@@ -1,16 +1,15 @@
-    {
-      "name": "professor-student-tools-static",
-      "version": "1.0.0",
-      "description": "Simple server for static tools app",
-      "main": "server.js",
-      "scripts": {
-        "start": "node server.js"
-      },
-      "dependencies": {
-        "express": "^4.17.1" // Or a more recent version
-      },
-      "engines": {
-        "node": "18.x" // Specify a Node.js version supported by Heroku
-      }
-    }
-    
+{
+  "name": "professor-student-tools-static",
+  "version": "1.0.0",
+  "description": "Simple server for static tools app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
