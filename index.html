@@ -9,180 +9,113 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
      <style>
-        /* Basic body styling */
-        body {
-            margin: 0;
-            font-family: 'Inter', sans-serif; /* Using Inter font commonly paired with Tailwind */
-             background-color: #f9fafb; /* Light gray background as a base */
+        body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .dot { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        /* Basic loading/error message styling */
+        .message-box {
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 8px;
         }
-         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-         /* Basic style for the toggle switch dot for better visibility */
-         .dot {
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-         }
-
-    </style>
+        .loading { background-color: #e0f2fe; color: #0c4a6e; }
+        .error { background-color: #fee2e2; color: #991b1b; }
+        .error-inline { color: #991b1b; font-size: 0.875rem; margin-top: 0.5rem; }
+     </style>
 </head>
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div> <script type="text/babel">
-      // Using React directly from window scope as it's loaded via CDN
-      const { useState, useEffect, useMemo } = React;
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useCallback } = React;
 
-      // --- Mock Data ---
-      // In a real application, this data would come from a backend server.
-      const initialQuestions = [
-        { id: 1, text: 'What is the deadline for Assignment 3?', votes: 5, comments: [{ id: 'c1', text: 'Second this!' }], answered: false, createdAt: new Date('2025-04-05T10:00:00Z') },
-        { id: 2, text: 'Can we get an extension on the project?', votes: 12, comments: [], answered: false, createdAt: new Date('2025-04-06T09:30:00Z') },
-        { id: 3, text: 'Where can I find the lecture recordings?', votes: 2, comments: [{ id: 'c2', text: 'Check the course website under "Resources".' }], answered: true, createdAt: new Date('2025-04-04T14:15:00Z') },
-        { id: 4, text: 'How is the final grade calculated?', votes: 8, comments: [], answered: false, createdAt: new Date('2025-04-06T11:00:00Z') },
-      ];
+      // Base URL for API
+      const API_BASE_URL = '';
 
       // --- Utility Functions ---
-      function classNames(...classes) {
-        return classes.filter(Boolean).join(' ')
-      }
+      function classNames(...classes) { return classes.filter(Boolean).join(' '); }
 
       // --- Components ---
-
-      /**
-       * Represents a single comment on a question.
-       * @param {object} props - Component props.
-       * @param {object} props.comment - The comment object { id, text }.
-       */
       function Comment({ comment }) {
+        // Display relative time for comments (optional enhancement)
+        // const timeAgo = /* Function to calculate time ago from comment.created_at */;
         return (
-          <div className="ml-4 mt-1 p-2 bg-gray-100 rounded text-sm text-gray-700">
-            {comment.text}
+          <div className="ml-4 mt-2 p-2 bg-gray-100 rounded text-sm text-gray-700">
+            <p>{comment.text}</p>
+            {/* Optional: <span className="text-xs text-gray-500">{timeAgo}</span> */}
           </div>
         );
       }
 
-      /**
-       * Represents a single question in the Raise Hand tool.
-       * @param {object} props - Component props.
-       * @param {object} props.question - The question object { id, text, votes, comments, answered }.
-       * @param {function} props.onVote - Callback function when the vote button is clicked.
-       * @param {function} props.onAddComment - Callback function to add a comment.
-       * @param {function} props.onToggleAnswer - Callback function to mark as answered (speaker only).
-       * @param {boolean} props.isSpeaker - Flag indicating if the current user is the speaker.
-       */
       function Question({ question, onVote, onAddComment, onToggleAnswer, isSpeaker }) {
         const [showComments, setShowComments] = useState(false);
         const [newComment, setNewComment] = useState('');
+        const [commentError, setCommentError] = useState(null); // State for comment errors
 
-        const handleAddComment = (e) => {
+        // Use the actual comments array fetched from the backend
+        const comments = question.comments || [];
+
+        const handleAddCommentSubmit = async (e) => {
           e.preventDefault();
-          if (newComment.trim()) {
-            onAddComment(question.id, newComment);
-            setNewComment('');
-            setShowComments(true); // Keep comments open after adding
+          const trimmedComment = newComment.trim();
+          if (!trimmedComment) return;
+
+          setCommentError(null); // Clear previous errors
+          try {
+            // Call the async function passed down from RaiseHandTool
+            await onAddComment(question.id, trimmedComment);
+            setNewComment(''); // Clear input on success
+            setShowComments(true); // Keep comments open
+          } catch (error) {
+            console.error("Failed to add comment:", error);
+            setCommentError(error.message || "Failed to post comment. Please try again.");
           }
         };
 
+
         return (
-          <div className={classNames(
-            "border rounded-lg p-4 mb-4 shadow-sm transition-colors duration-200",
-            question.answered ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:bg-gray-50'
-          )}>
-            {/* Main content flex container */}
-            <div className="flex items-start justify-between gap-4"> {/* Added gap for spacing */}
-              {/* Left side: Question text and actions */}
-              <div className="flex-grow min-w-0"> {/* Added min-w-0 to prevent overflow */}
-                <p className={classNames(
-                   "text-gray-800 break-words", // Added break-words
-                   question.answered ? 'line-through text-gray-500' : ''
-                )}>
+          <div className={classNames( "border rounded-lg p-4 mb-4 shadow-sm transition-colors duration-200", question.is_answered ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:bg-gray-50' )}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-grow min-w-0">
+                <p className={classNames( "text-gray-800 break-words", question.is_answered ? 'line-through text-gray-500' : '' )}>
                   {question.text}
                 </p>
-                {/* Actions container */}
-                <div className="text-sm text-gray-500 mt-2 flex flex-wrap items-center gap-x-4 gap-y-1"> {/* Use flex-wrap and gap */}
-                   {/* Vote Button */}
-                  <button
-                    onClick={() => onVote(question.id)}
-                    disabled={question.answered}
-                    className={classNames(
-                        "flex items-center px-2 py-1 rounded transition-colors duration-150",
-                        question.answered
-                          ? "text-gray-400 cursor-not-allowed"
-                          : "text-blue-600 hover:bg-blue-100 disabled:opacity-50"
-                    )}
-                    aria-label={`Vote for question: ${question.text}`}
-                  >
-                    {/* Vote Icon */}
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                    </svg>
+                <div className="text-sm text-gray-500 mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {/* Vote Button */}
+                  <button onClick={() => onVote(question.id)} disabled={question.is_answered} className={classNames( "flex items-center px-2 py-1 rounded transition-colors duration-150", question.is_answered ? "text-gray-400 cursor-not-allowed" : "text-blue-600 hover:bg-blue-100 disabled:opacity-50" )} aria-label={`Vote for question: ${question.text}`} >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
                     <span>{question.votes} Vote{question.votes !== 1 ? 's' : ''}</span>
                   </button>
                   {/* Comment Toggle Button */}
-                  <button
-                    onClick={() => setShowComments(!showComments)}
-                    className="flex items-center text-gray-600 hover:text-indigo-600 text-sm"
-                     aria-expanded={showComments}
-                     aria-controls={`comments-${question.id}`}
-                  >
-                     {/* Comment Icon */}
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    {question.comments.length} Comment{question.comments.length !== 1 ? 's' : ''}
+                  <button onClick={() => setShowComments(!showComments)} className="flex items-center text-gray-600 hover:text-indigo-600 text-sm" aria-expanded={showComments} aria-controls={`comments-${question.id}`} >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                     {comments.length} Comment{comments.length !== 1 ? 's' : ''}
                   </button>
                    {/* Answered Status Badge */}
-                   {question.answered && (
+                   {question.is_answered && (
                       <span className="text-green-600 font-medium text-xs inline-flex items-center bg-green-100 px-2 py-0.5 rounded-full">
-                        {/* Checkmark Icon */}
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                         Answered
                       </span>
                     )}
                 </div>
               </div>
-
-              {/* Right side: Speaker Action Button */}
-              {isSpeaker && (
-                <button
-                  onClick={() => onToggleAnswer(question.id)}
-                  className={classNames(
-                      "flex-shrink-0 text-sm font-medium px-3 py-1 rounded transition-colors duration-150 self-start", // Added self-start
-                      question.answered ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
-                  )}
-                >
-                  {question.answered ? 'Mark Unanswered' : 'Mark Answered'}
-                </button>
-              )}
+              {/* Speaker Action Button */}
+              {isSpeaker && ( <button onClick={() => onToggleAnswer(question.id, !question.is_answered)} className={classNames( "flex-shrink-0 text-sm font-medium px-3 py-1 rounded transition-colors duration-150 self-start", question.is_answered ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200' )} > {question.is_answered ? 'Mark Unanswered' : 'Mark Answered'} </button> )}
             </div>
 
-            {/* Comments Section (Collapsible) */}
+            {/* Comments Section */}
             {showComments && (
               <div id={`comments-${question.id}`} className="mt-3 pl-4 border-l-2 border-gray-200">
-                {/* List of existing comments */}
-                {question.comments.length > 0 ? (
-                  question.comments.map(comment => <Comment key={comment.id} comment={comment} />)
-                ) : (
-                  <p className="text-sm text-gray-500 italic">No comments yet.</p>
-                )}
-                {/* Add Comment Form */}
-                <form onSubmit={handleAddComment} className="mt-3 flex items-center">
-                  <input
-                    type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Add a comment..."
-                    className="flex-grow border border-gray-300 rounded-l px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    aria-label="Add a comment to this question"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 text-white px-3 py-1.5 rounded-r text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 transition-colors duration-150 disabled:opacity-50"
-                    disabled={!newComment.trim()}
-                  >
-                    Add
-                  </button>
+                {comments.length > 0 ? (
+                  comments.map(comment => <Comment key={comment.id} comment={comment} />)
+                ) : ( <p className="text-sm text-gray-500 italic">No comments yet.</p> )}
+                <form onSubmit={handleAddCommentSubmit} className="mt-3 flex items-center">
+                  <input type="text" value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Add a comment..." className="flex-grow border border-gray-300 rounded-l px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" aria-label="Add a comment to this question" />
+                  <button type="submit" className="bg-indigo-600 text-white px-3 py-1.5 rounded-r text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 transition-colors duration-150 disabled:opacity-50" disabled={!newComment.trim()} > Add </button>
                 </form>
+                {commentError && <p className="error-inline">{commentError}</p>}
               </div>
             )}
           </div>
@@ -191,164 +124,232 @@
 
       /**
        * The main view for the "Raise Hand" tool.
-       * Manages the list of questions and interactions.
-       * @param {object} props - Component props.
-       * @param {function} props.onGoBack - Callback function to navigate back to the tool list.
        */
       function RaiseHandTool({ onGoBack }) {
-        const [questions, setQuestions] = useState(() => {
-            // Initialize state with dates parsed correctly
-            return initialQuestions.map(q => ({...q, createdAt: new Date(q.createdAt)}));
-        });
+        const [questions, setQuestions] = useState([]);
+        const [isLoading, setIsLoading] = useState(true);
+        const [error, setError] = useState(null);
         const [newQuestion, setNewQuestion] = useState('');
-        const [isSpeaker, setIsSpeaker] = useState(false); // Simulate speaker role
+        const [isSpeaker, setIsSpeaker] = useState(false);
 
-        // --- Event Handlers ---
-        const handleAddQuestion = (e) => {
+        // --- Fetch Questions (includes comments now - requires backend update) ---
+        const fetchQuestions = useCallback(async () => {
+          setIsLoading(true);
+          setError(null);
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/questions`); // Assume this now returns comments too
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            const questionsWithDates = data.map(q => ({
+                ...q,
+                createdAt: new Date(q.created_at),
+                // Ensure comments have dates parsed if needed
+                comments: (q.comments || []).map(c => ({ ...c, createdAt: new Date(c.created_at) }))
+            }));
+            setQuestions(questionsWithDates);
+          } catch (e) {
+            console.error("Failed to fetch questions:", e);
+            setError("Failed to load questions. Please try again later.");
+          } finally {
+            setIsLoading(false);
+          }
+        }, []);
+
+        useEffect(() => {
+          fetchQuestions();
+        }, [fetchQuestions]);
+
+        // --- Add Question ---
+        const handleAddQuestion = async (e) => {
           e.preventDefault();
-          if (newQuestion.trim()) {
+          const trimmedQuestion = newQuestion.trim();
+          if (!trimmedQuestion) return;
+          const originalQuestions = questions; // Store state for potential revert
+          setNewQuestion(''); // Clear input immediately
+
+          // Optimistic update (optional)
+          // const tempId = `temp-${Date.now()}`;
+          // setQuestions(prev => [{ id: tempId, text: trimmedQuestion, votes: 0, is_answered: false, createdAt: new Date(), comments: [] }, ...prev]);
+
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/questions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: trimmedQuestion }),
+            });
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            const addedQuestion = await response.json();
+            // Replace optimistic update or just add if not doing optimistic
+            // Ensure comments array exists and dates are parsed
             const newQ = {
-              id: Date.now(), // Simple ID generation for demo
-              text: newQuestion,
-              votes: 0,
-              comments: [],
-              answered: false,
-              createdAt: new Date(), // Use current date for new questions
+                ...addedQuestion,
+                createdAt: new Date(addedQuestion.created_at),
+                comments: (addedQuestion.comments || []).map(c => ({ ...c, createdAt: new Date(c.created_at) }))
             };
-            // Add to the list (sorting will place it correctly)
-            setQuestions(prevQuestions => [newQ, ...prevQuestions]);
-            setNewQuestion(''); // Clear input field
+            // Add to the top of the list
+             setQuestions(prevQuestions => [newQ, ...prevQuestions]);
+             // If using optimistic: setQuestions(prev => prev.map(q => q.id === tempId ? newQ : q));
+
+          } catch (e) {
+            console.error("Failed to add question:", e);
+            setError(`Failed to add question: ${e.message}. Please try again.`);
+            setNewQuestion(trimmedQuestion); // Restore input on error
+            // Revert optimistic update if used
+            // setQuestions(originalQuestions);
           }
         };
 
-        const handleVote = (questionId) => {
+        // --- Vote ---
+        const handleVote = useCallback(async (questionId) => {
+          // Optimistic update
+          const originalQuestions = questions;
           setQuestions(prevQuestions =>
             prevQuestions.map(q =>
               q.id === questionId ? { ...q, votes: q.votes + 1 } : q
             )
           );
-        };
 
-        const handleAddComment = (questionId, commentText) => {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/questions/${questionId}/vote`, { method: 'POST' }); // Assuming POST endpoint
+            if (!response.ok) {
+                // Revert optimistic update on failure
+                setQuestions(originalQuestions);
+                const errorData = await response.json().catch(() => ({})); // Try to get error message
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            // Optional: Refetch or update state with response data if needed,
+            // but optimistic update might be sufficient if backend just confirms success.
+          } catch (e) {
+            console.error("Failed to vote:", e);
+            setError(`Vote failed: ${e.message}`);
+            // Ensure state is reverted if fetch failed before parsing response
+            setQuestions(originalQuestions);
+          }
+        }, [questions]); // Include questions to get latest state for revert
+
+        // --- Add Comment ---
+        const handleAddComment = useCallback(async (questionId, commentText) => {
+          // Note: Optimistic update is handled partially in the Question component for temp display.
+          // This function focuses on the API call. We expect it to throw on error.
+          const response = await fetch(`${API_BASE_URL}/api/questions/${questionId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: commentText }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          }
+
+          const newComment = await response.json();
+
+          // Update the specific question's comments array with the real comment from the backend
           setQuestions(prevQuestions =>
             prevQuestions.map(q =>
               q.id === questionId
                 ? {
                     ...q,
                     comments: [
-                      ...q.comments,
-                      { id: `c${Date.now()}`, text: commentText }, // Simple comment ID
-                    ],
+                        ...(q.comments || []), // Ensure comments array exists
+                        { ...newComment, createdAt: new Date(newComment.created_at) } // Add the new comment with parsed date
+                    ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // Keep comments sorted
                   }
                 : q
             )
           );
-        };
+          // Let the Question component handle clearing input etc. via try/catch around this call
+        }, []); // No dependency on questions state needed here directly
 
-        const handleToggleAnswer = (questionId) => {
-           // Only allow speaker to toggle answer status
-           if (!isSpeaker) return;
+        // --- Toggle Answer ---
+        const handleToggleAnswer = useCallback(async (questionId, newAnsweredState) => {
+          if (!isSpeaker) return;
+          const originalQuestions = questions;
+
+          // Optimistic update
           setQuestions(prevQuestions =>
             prevQuestions.map(q =>
-              q.id === questionId ? { ...q, answered: !q.answered } : q
+              q.id === questionId ? { ...q, is_answered: newAnsweredState } : q
             )
           );
-        };
 
-        // --- Sorting Logic ---
-        // Sort by: 1. Answered (unanswered first), 2. Votes (descending), 3. Creation time (ascending)
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/questions/${questionId}/answer`, { // Assuming PATCH endpoint
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ is_answered: newAnsweredState }),
+            });
+             if (!response.ok) {
+                setQuestions(originalQuestions); // Revert
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            // Optional: update state with response data if backend modifies it further
+          } catch (e) {
+            console.error("Failed to toggle answer status:", e);
+            setError(`Update failed: ${e.message}`);
+            setQuestions(originalQuestions); // Revert
+          }
+        }, [isSpeaker, questions]); // Include questions for revert, isSpeaker for check
+
+
+        // --- Sorting Logic (remains the same) ---
         const sortedQuestions = useMemo(() => {
           return [...questions].sort((a, b) => {
-            // Sort answered questions to the bottom
-            if (a.answered !== b.answered) {
-              return a.answered ? 1 : -1;
-            }
-            // Sort by votes (descending)
-            if (b.votes !== a.votes) {
-              return b.votes - a.votes;
-            }
-            // Sort by creation time (ascending - older first)
-            // Ensure createdAt are valid Date objects before comparison
+            if (a.is_answered !== b.is_answered) { return a.is_answered ? 1 : -1; }
+            if (b.votes !== a.votes) { return b.votes - a.votes; }
             const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
             const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
             return dateA - dateB;
           });
-        }, [questions]); // Re-sort whenever questions change
+        }, [questions]);
 
+        // --- Render UI ---
         return (
-          // Main container for the tool view
           <div className="p-4 sm:p-6 bg-gray-50 min-h-screen font-sans relative">
-             {/* Back Button - Positioned absolutely */}
-             <button
-                onClick={onGoBack} // Use the callback passed from App
-                className="absolute top-4 left-4 z-10 bg-white text-indigo-600 px-3 py-1 rounded-md shadow text-sm font-medium hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                aria-label="Go back to tool list"
-              >
-                &larr; Back to Tools
-              </button>
-
-             {/* Content Area */}
-             <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md mt-12 sm:mt-16"> {/* Added more margin-top */}
-                {/* Header Section */}
+             <button onClick={onGoBack} className="absolute top-4 left-4 z-10 bg-white text-indigo-600 px-3 py-1 rounded-md shadow text-sm font-medium hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" aria-label="Go back to tool list" > &larr; Back to Tools </button>
+             <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md mt-12 sm:mt-16">
+                {/* Header and Speaker Toggle */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-4 border-b border-gray-200 gap-4">
                   <h2 className="text-2xl font-semibold text-gray-800 flex-shrink-0">Raise Hand / Q&A</h2>
-                  {/* Speaker Mode Toggle Switch */}
                   <label className="flex items-center cursor-pointer flex-shrink-0">
                     <span className="mr-2 text-sm font-medium text-gray-700">Speaker Mode:</span>
                     <div className="relative">
-                      {/* Hidden checkbox input */}
-                      <input
-                         type="checkbox"
-                         className="sr-only peer" // Use peer class for styling based on state
-                         checked={isSpeaker}
-                         onChange={() => setIsSpeaker(!isSpeaker)}
-                         id="speaker-toggle"
-                       />
-                       {/* Toggle background */}
+                      <input type="checkbox" className="sr-only peer" checked={isSpeaker} onChange={() => setIsSpeaker(!isSpeaker)} id="speaker-toggle" />
                       <div className="w-10 h-6 rounded-full transition bg-gray-300 peer-checked:bg-indigo-600"></div>
-                      {/* Toggle dot */}
                       <div className="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform peer-checked:translate-x-4 dot"></div>
                     </div>
                   </label>
                 </div>
-
-
-                {/* Add New Question Form */}
+                {/* Add Question Form */}
                 <form onSubmit={handleAddQuestion} className="mb-6 flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={newQuestion}
-                    onChange={(e) => setNewQuestion(e.target.value)}
-                    placeholder="Ask a question..."
-                    className="flex-grow border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    aria-label="Ask a new question"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-md font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150 disabled:opacity-50"
-                    disabled={!newQuestion.trim()} // Disable if input is empty
-                  >
-                    Ask
-                  </button>
+                  <input type="text" value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)} placeholder="Ask a question..." className="flex-grow border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" aria-label="Ask a new question" />
+                  <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-md font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150 disabled:opacity-50" disabled={!newQuestion.trim()} > Ask </button>
                 </form>
+                 {/* Display Top-Level Error */}
+                 {error && <div className="message-box error mb-4">{error}</div>}
 
-                {/* List of Questions */}
+                {/* Display Loading / Questions List */}
                 <div className="space-y-4">
                    <h3 className="text-lg font-medium text-gray-700 mb-2">Questions</h3>
-                   {/* Conditionally render questions or a placeholder message */}
-                   {sortedQuestions.length > 0 ? (
+                   {isLoading && <div className="message-box loading">Loading questions...</div>}
+                   {!isLoading && !error && sortedQuestions.length === 0 && (
+                       <p className="text-gray-500 italic text-center py-4">No questions asked yet. Be the first!</p>
+                   )}
+                   {!isLoading && !error && sortedQuestions.length > 0 && (
                       sortedQuestions.map(question => (
                         <Question
                           key={question.id}
                           question={question}
-                          onVote={handleVote}
+                          onVote={handleVote} // Pass down the updated handlers
                           onAddComment={handleAddComment}
                           onToggleAnswer={handleToggleAnswer}
-                          isSpeaker={isSpeaker} // Pass speaker status down
+                          isSpeaker={isSpeaker}
                         />
                       ))
-                   ) : (
-                       <p className="text-gray-500 italic text-center py-4">No questions asked yet. Be the first!</p>
                    )}
                 </div>
              </div>
@@ -356,97 +357,22 @@
         );
       }
 
-
-      /**
-       * Displays the list of available tools on the landing page.
-       * @param {object} props - Component props.
-       * @param {function} props.onSelectTool - Callback function when a tool button is clicked.
-       */
-      function ToolList({ onSelectTool }) {
-        // Define the available tools
-        const tools = [
-          { id: 'raise-hand', name: 'Raise Hand (Q&A)', description: 'Ask questions, vote, and get answers.' },
-          { id: 'poll', name: 'Poll', description: 'Create and participate in live polls. (Coming Soon)' },
-          { id: 'find-teammate', name: 'Find Teammate', description: 'Connect with peers for group projects. (Coming Soon)' },
-        ];
-
-        return (
-          // Main container for the tool list view
-          <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 flex items-center justify-center p-6 font-sans">
-            {/* Centered card for the tool list */}
-            <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg p-8">
-              <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">Professor & Student Tools</h1>
-              {/* Container for tool buttons */}
-              <div className="space-y-4">
-                {/* Map over the tools array to create buttons */}
-                {tools.map(tool => (
-                  <button
-                    key={tool.id}
-                    onClick={() => onSelectTool(tool.id)} // Call onSelectTool with the tool's ID
-                    className="w-full text-left p-5 border border-gray-200 rounded-lg hover:bg-gray-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 transition duration-150 ease-in-out"
-                    // Disable button slightly if not 'raise-hand' for demo purposes
-                    // disabled={tool.id !== 'raise-hand'}
-                    // style={{ opacity: tool.id !== 'raise-hand' ? 0.7 : 1 }}
-                  >
-                    <h2 className="text-xl font-semibold text-indigo-700">{tool.name}</h2>
-                    <p className="text-gray-600 mt-1">{tool.description}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
+      // --- ToolList and App components remain the same ---
+      function ToolList({ onSelectTool }) { /* ... ToolList component code ... */
+         const tools = [ { id: 'raise-hand', name: 'Raise Hand (Q&A)', description: 'Ask questions, vote, and get answers.' }, { id: 'poll', name: 'Poll', description: 'Create and participate in live polls. (Coming Soon)' }, { id: 'find-teammate', name: 'Find Teammate', description: 'Connect with peers for group projects. (Coming Soon)' }, ];
+         return ( <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 flex items-center justify-center p-6 font-sans"> <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg p-8"> <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">Professor & Student Tools</h1> <div className="space-y-4"> {tools.map(tool => ( <button key={tool.id} onClick={() => onSelectTool(tool.id)} className="w-full text-left p-5 border border-gray-200 rounded-lg hover:bg-gray-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 transition duration-150 ease-in-out" > <h2 className="text-xl font-semibold text-indigo-700">{tool.name}</h2> <p className="text-gray-600 mt-1">{tool.description}</p> </button> ))} </div> </div> </div> );
       }
-
-      /**
-       * The main application component (Root Component).
-       * Manages the current view state (which tool is active).
-       */
-      function App() {
-        // State to track the currently selected tool ('raise-hand', 'poll', etc., or null for list)
+      function App() { /* ... App component code remains the same ... */
         const [currentTool, setCurrentTool] = useState(null);
-
-        // Handler function to set the current tool based on button click
-        const handleSelectTool = (toolId) => {
-          if (toolId === 'raise-hand') {
-              setCurrentTool(toolId); // Switch view to RaiseHandTool
-          } else {
-              // Placeholder alert for unimplemented tools
-              alert(`Tool "${toolId}" is not yet implemented.`);
-          }
-        };
-
-        // Handler function to navigate back to the tool list
-        const handleGoBack = () => {
-          setCurrentTool(null); // Set state to null to show ToolList
-        };
-
-        // --- Conditional Rendering ---
-        // Render the RaiseHandTool if 'raise-hand' is the current tool
-        if (currentTool === 'raise-hand') {
-          // Pass the handleGoBack function as a prop
-          return <RaiseHandTool onGoBack={handleGoBack} />;
-        }
-
-        // Add conditions for other tools here when implemented
-        // else if (currentTool === 'poll') {
-        //   return <PollTool onGoBack={handleGoBack} />;
-        // }
-        // else if (currentTool === 'find-teammate') {
-        //   return <FindTeammateTool onGoBack={handleGoBack} />;
-        // }
-
-        // Default view: Render the ToolList component if no tool is selected
+        const handleSelectTool = (toolId) => { if (toolId === 'raise-hand') { setCurrentTool(toolId); } else { alert(`Tool "${toolId}" is not yet implemented.`); } };
+        const handleGoBack = () => { setCurrentTool(null); };
+        if (currentTool === 'raise-hand') { return <RaiseHandTool onGoBack={handleGoBack} />; }
         return <ToolList onSelectTool={handleSelectTool} />;
       }
 
-
       // --- Render the App ---
-      // Get the root DOM element
       const container = document.getElementById('root');
-      // Create a React root
       const root = ReactDOM.createRoot(container);
-      // Render the main App component into the root
       root.render(<App />);
 
     </script>
