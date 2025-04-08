@@ -32,21 +32,36 @@ app.use(express.static(__dirname));
 // --- API Endpoints ---
 
 // GET /api/questions - Fetch all questions
-// TODO: Update this query to also fetch comments using a JOIN or separate query
 app.get('/api/questions', async (req, res) => {
   try {
-    // Query the database to get all questions
-    // Order them similarly to the frontend logic: unanswered first, then by votes, then by time
-    const result = await pool.query(
-      'SELECT id, text, votes, is_answered, created_at FROM questions ORDER BY is_answered ASC, votes DESC, created_at ASC'
-    );
-    // Send the rows back as JSON
-    // Map results to include an empty comments array for frontend compatibility for now
-    // In a future step, fetch actual comments here.
+    // Query the database to get all questions with their comments
+    // Using LEFT JOIN to include questions even if they have no comments
+    const result = await pool.query(`
+      SELECT 
+        q.id, 
+        q.text, 
+        q.votes, 
+        q.is_answered, 
+        q.created_at,
+        json_agg(
+          json_build_object(
+            'id', c.id,
+            'text', c.text,
+            'created_at', c.created_at
+          )
+        ) FILTER (WHERE c.id IS NOT NULL) as comments
+      FROM questions q
+      LEFT JOIN comments c ON q.id = c.question_id
+      GROUP BY q.id, q.text, q.votes, q.is_answered, q.created_at
+      ORDER BY q.is_answered ASC, q.votes DESC, q.created_at ASC
+    `);
+
+    // Process the results to ensure comments is always an array
     const questionsWithComments = result.rows.map(q => ({
-        ...q,
-        comments: [] // Placeholder - Fetch actual comments in a future step
+      ...q,
+      comments: q.comments || [] // Ensure comments is an array even if null
     }));
+
     res.json(questionsWithComments);
   } catch (err) {
     console.error('Error fetching questions:', err);
