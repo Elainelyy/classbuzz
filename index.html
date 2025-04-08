@@ -36,6 +36,11 @@
       // --- Utility Functions ---
       function classNames(...classes) { return classes.filter(Boolean).join(' '); }
 
+      // --- Mock Data ---
+      const initialPollsData = [
+          { id: 'p1', question: 'What is your favorite programming language?', options: ['JavaScript', 'Python', 'Java', 'C++'], results: { 'JavaScript': 15, 'Python': 25, 'Java': 8, 'C++': 5 }, userAnswers: {}, totalVotes: 53 }, // Store user answers keyed by a user ID (simulated)
+          { id: 'p2', question: 'Which topic should we cover next week?', options: ['Async/Await', 'Database Indexing', 'WebSockets'], results: { 'Async/Await': 12, 'Database Indexing': 18, 'WebSockets': 9 }, userAnswers: {}, totalVotes: 39 },
+      ];
       // --- Components ---
       function Comment({ comment }) {
         // Display relative time for comments (optional enhancement)
