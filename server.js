@@ -32,6 +32,7 @@ app.use(express.static(__dirname));
 // --- API Endpoints ---
 
 // GET /api/questions - Fetch all questions
+// TODO: Update this query to also fetch comments using a JOIN or separate query
 app.get('/api/questions', async (req, res) => {
   try {
     // Query the database to get all questions
@@ -41,6 +42,7 @@ app.get('/api/questions', async (req, res) => {
     );
     // Send the rows back as JSON
     // Map results to include an empty comments array for frontend compatibility for now
+    // In a future step, fetch actual comments here.
     const questionsWithComments = result.rows.map(q => ({
         ...q,
         comments: [] // Placeholder - Fetch actual comments in a future step
@@ -111,6 +113,86 @@ app.post('/api/questions/:id/vote', async (req, res) => {
   } catch (err) {
     console.error(`Error voting on question ${questionId}:`, err);
     res.status(500).json({ error: 'Failed to record vote.' });
+  }
+});
+
+// POST /api/questions/:id/comments - Add a comment to a specific question
+app.post('/api/questions/:id/comments', async (req, res) => {
+    // Extract question ID from URL parameters
+    const questionId = parseInt(req.params.id, 10);
+    // Extract comment text from request body
+    const { text } = req.body;
+
+    // Validate question ID
+    if (isNaN(questionId)) {
+        return res.status(400).json({ error: 'Invalid question ID.' });
+    }
+    // Validate comment text
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+        return res.status(400).json({ error: 'Comment text is required.' });
+    }
+
+    try {
+        // Insert the new comment, linking it to the question ID
+        // Return the newly created comment row
+        const result = await pool.query(
+            'INSERT INTO comments (question_id, text) VALUES ($1, $2) RETURNING id, question_id, text, created_at',
+            [questionId, text.trim()]
+        );
+
+        // Check if the insert was successful (should always return 1 row if no error)
+        if (result.rowCount === 1) {
+            res.status(201).json(result.rows[0]); // Send the new comment back
+        } else {
+            // This case should ideally not happen if no error was thrown, but good to handle
+            throw new Error('Comment insertion failed unexpectedly.');
+        }
+
+    } catch (err) {
+        console.error(`Error adding comment to question ${questionId}:`, err);
+        // Check if the error is due to foreign key violation (question_id doesn't exist)
+        if (err.code === '23503') { // PostgreSQL foreign key violation error code
+             return res.status(404).json({ error: 'Question not found.' });
+        }
+        // Handle other potential errors
+        res.status(500).json({ error: 'Failed to add comment.' });
+    }
+});
+
+// PATCH /api/questions/:id/answer - Toggle is_answered status for a question
+app.patch('/api/questions/:id/answer', async (req, res) => {
+  // Extract question ID from URL parameters
+  const questionId = parseInt(req.params.id, 10);
+  // Extract the new answered status from the request body
+  const { is_answered } = req.body;
+
+  // Validate question ID
+  if (isNaN(questionId)) {
+      return res.status(400).json({ error: 'Invalid question ID.' });
+  }
+  // Validate is_answered status (must be a boolean)
+  if (typeof is_answered !== 'boolean') {
+      return res.status(400).json({ error: 'Invalid value for is_answered. It must be true or false.' });
+  }
+
+  try {
+      // Update the is_answered status for the specified question ID
+      const result = await pool.query(
+          'UPDATE questions SET is_answered = $1 WHERE id = $2 RETURNING id, is_answered',
+          [is_answered, questionId]
+      );
+
+      // Check if a row was actually updated
+      if (result.rowCount === 0) {
+          return res.status(404).json({ error: 'Question not found.' });
+      }
+
+      // Send success response
+      res.status(200).json({ message: 'Answer status updated successfully.', is_answered: result.rows[0].is_answered });
+
+  } catch (err) {
+      console.error(`Error updating answer status for question ${questionId}:`, err);
+      res.status(500).json({ error: 'Failed to update answer status.' });
   }
 });
 
