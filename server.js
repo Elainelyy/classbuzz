@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors'); // Import CORS middleware
 const { Pool } = require('pg'); // Import Node-postgres
+const db = require('./db'); // Import database functions
 
 // Create an Express application instance
 const app = express();
