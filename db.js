@@ -2,10 +2,16 @@
 async function createPoll(question, options, pollType) {
   const query = `
     INSERT INTO polls (question, options, poll_type, poll_status, created_at)
-    VALUES ($1, $2::TEXT[], $3, 'idle', NOW())
+    VALUES ($1, $2, $3, 'idle', NOW())
     RETURNING *;
   `;
-  const values = [question, options, pollType];
+  // For open_ended polls, set options to NULL
+  // For other types, ensure options is an array with at least 2 elements
+  const values = [
+    question,
+    pollType === 'open_ended' ? null : options,
+    pollType
+  ];
   const result = await pool.query(query, values);
   return result.rows[0];
 }
