@@ -2,7 +2,7 @@
 async function createPoll(question, options, pollType) {
   const query = `
     INSERT INTO polls (question, options, poll_type, poll_status, created_at)
-    VALUES ($1, $2, $3, 'idle', NOW())
+    VALUES ($1, $2::TEXT[], $3, 'idle', NOW())
     RETURNING *;
   `;
   const values = [question, options, pollType];
