@@ -668,9 +668,14 @@
               // Find the index of the selected option
               const optionIndex = currentAudiencePoll.options.indexOf(selectedOption);
               
+              // TODO: Replace with real user authentication
+              // Using a numeric userId as the backend expects an integer
+              const tempUserId = Math.floor(Math.random() * 10000) + 1;
+              
               console.log("Submitting vote:", { 
                 pollId, 
-                selectedOption, 
+                selectedOption,
+                userId: tempUserId,
                 selectedOptionIndex: optionIndex
               });
               
@@ -682,8 +687,8 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  userId: 'user1', // Use camelCase as expected by the server
-                  selectedOptionIndex: optionIndex // Use camelCase as expected by the server
+                  userId: tempUserId, // Using numeric ID for now
+                  selectedOptionIndex: optionIndex
                 })
               });
               
@@ -710,14 +715,22 @@
             }
             
             try {
-              console.log("Submitting open answer:", { pollId, answerText }); // Debug
+              // TODO: Replace with real user authentication
+              // Using a numeric userId as the backend expects an integer
+              const tempUserId = Math.floor(Math.random() * 10000) + 1;
+              
+              console.log("Submitting open answer:", { 
+                pollId, 
+                answerText,
+                userId: tempUserId 
+              });
               
               const response = await fetch(`${API_BASE_URL}/api/polls/${pollId}/open-answer`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  userId: 'user1', // Use camelCase as expected by the server
-                  answerText: answerText // Use camelCase as expected by the server
+                  userId: tempUserId, // Using numeric ID for now
+                  answerText: answerText
                 })
               });
               
