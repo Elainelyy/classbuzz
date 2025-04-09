@@ -400,91 +400,263 @@
        * The main view for the "Poll" tool - Updated Speaker View & Audience Navigation.
        */
       function PollTool({ onGoBack }) {
-          const [polls, setPolls] = useState(initialPollsData); // Use mock data
+          const [polls, setPolls] = useState([]);
           const [isSpeaker, setIsSpeaker] = useState(false);
           const [submittedAnswers, setSubmittedAnswers] = useState({});
           const [editingPollId, setEditingPollId] = useState(null);
+          const [isLoading, setIsLoading] = useState(true);
+          const [error, setError] = useState(null);
 
-          // --- State for Audience Navigation ---
-          const [currentAudiencePollIndex, setCurrentAudiencePollIndex] = useState(0);
+          // Fetch polls from the API
+          const fetchPolls = useCallback(async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/polls`);
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+              const data = await response.json();
+              setPolls(data);
+            } catch (e) {
+              console.error("Failed to fetch polls:", e);
+              setError("Failed to load polls. Please try again later.");
+            } finally {
+              setIsLoading(false);
+            }
+          }, []);
 
-          // --- Derived State ---
-          // Filter polls for audience view (Active or Ended only)
-          const visibleAudiencePolls = useMemo(() => polls.filter(p => p.status === 'active' || p.status === 'ended'), [polls]);
+          useEffect(() => {
+            fetchPolls();
+          }, [fetchPolls]);
 
-          // Get the specific poll the audience is currently viewing from the *filtered* list
-          const currentAudiencePoll = visibleAudiencePolls[currentAudiencePollIndex];
-
-          // Check submission status for the poll audience is viewing
-          const hasSubmittedCurrentAudiencePoll = submittedAnswers[currentAudiencePoll?.id];
-
-          // Find the poll being edited by speaker
-          const pollBeingEdited = useMemo(() => { /* ... unchanged ... */ if (editingPollId === null || editingPollId === 'new') return null; return polls.find(p => p.id === editingPollId); }, [editingPollId, polls]);
-
-          // --- Audience State ---
-          const [selectedOption, setSelectedOption] = useState(null);
-
-          // Reset audience selection when the viewed poll index *or the list of visible polls* changes
-           useEffect(() => {
-              // Ensure index is valid for the potentially changed visible list
-              const newIndex = Math.min(currentAudiencePollIndex, Math.max(0, visibleAudiencePolls.length - 1));
-              if (newIndex !== currentAudiencePollIndex) {
-                  setCurrentAudiencePollIndex(newIndex);
-              }
-
-              const poll = visibleAudiencePolls[newIndex]; // Get poll based on current index from visible list
-              if (poll) {
-                  setSelectedOption(null); // Reset selection
-                  const pollId = poll.id;
-                  // Check if user already answered this poll
-                  if (pollId && submittedAnswers[pollId]) {
-                      const userAnswer = poll.userAnswers?.['user1']; // Simulate
-                      if(userAnswer) setSelectedOption(userAnswer);
-                  }
-              } else {
-                  setSelectedOption(null); // No visible poll
-              }
-          // Depend on the index and the derived visible polls list
-          }, [currentAudiencePollIndex, visibleAudiencePolls, submittedAnswers]);
-
-
-          // --- Handlers ---
-          const handleSelectOption = (option) => {
-              // Allow selection only if the CURRENTLY VIEWED poll is 'active'
-              if (hasSubmittedCurrentAudiencePoll || isSpeaker || currentAudiencePoll?.status !== 'active') return;
-              setSelectedOption(option);
+          // Handle creating a new poll
+          const handleCreatePoll = async (pollData) => {
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/polls`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  question: pollData.question,
+                  options: pollData.options,
+                  pollType: pollData.pollType
+                })
+              });
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+              const newPoll = await response.json();
+              setPolls(prevPolls => [newPoll, ...prevPolls]);
+              setEditingPollId(null);
+            } catch (e) {
+              console.error("Failed to create poll:", e);
+              setError("Failed to create poll. Please try again.");
+            }
           };
 
-          const handleSubmitAnswer = () => {
-              // Ensure we are submitting for the currently viewed poll AND it's active
-              if (!selectedOption || hasSubmittedCurrentAudiencePoll || isSpeaker || !currentAudiencePoll || currentAudiencePoll.status !== 'active') return;
-              const pollId = currentAudiencePoll.id;
-              // --- Simulate Submission & Result Update ---
-              const updatedPolls = polls.map(poll => { if (poll.id === pollId) { const newResults = { ...poll.results }; newResults[selectedOption] = (newResults[selectedOption] || 0) + 1; const newTotalVotes = poll.totalVotes + 1; const newUserAnswers = { ...poll.userAnswers, 'user1': selectedOption }; return { ...poll, results: newResults, totalVotes: newTotalVotes, userAnswers: newUserAnswers }; } return poll; });
-              setPolls(updatedPolls);
+          // Handle updating poll status
+          const handleTogglePollStatus = async (pollId) => {
+            try {
+              const currentPoll = polls.find(p => p.id === pollId);
+              if (!currentPoll) return;
+
+              let newStatus;
+              if (currentPoll.poll_status === 'idle') newStatus = 'active';
+              else if (currentPoll.poll_status === 'active') newStatus = 'ended';
+              else newStatus = 'idle';
+
+              const response = await fetch(`${API_BASE_URL}/api/polls/${pollId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+              });
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+              const updatedPoll = await response.json();
+              setPolls(prevPolls => prevPolls.map(p => p.id === pollId ? updatedPoll : p));
+            } catch (e) {
+              console.error("Failed to update poll status:", e);
+              setError("Failed to update poll status. Please try again.");
+            }
+          };
+
+          // Handle submitting a vote
+          const handleSubmitVote = async (pollId, selectedOptionIndex) => {
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/polls/${pollId}/vote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: 'user1', // TODO: Replace with actual user ID
+                  selectedOptionIndex
+                })
+              });
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
               setSubmittedAnswers(prev => ({ ...prev, [pollId]: true }));
-              // TODO: Replace simulation with API call: POST /api/polls/:id/vote
+            } catch (e) {
+              console.error("Failed to submit vote:", e);
+              setError("Failed to submit vote. Please try again.");
+            }
           };
 
-          // --- Audience Navigation Handlers (Operate on 'visibleAudiencePolls' array) ---
-          const handleAudienceNextPoll = () => {
-              if (currentAudiencePollIndex < visibleAudiencePolls.length - 1) {
-                  setCurrentAudiencePollIndex(currentAudiencePollIndex + 1);
+          // Handle submitting an open answer
+          const handleSubmitOpenAnswer = async (pollId, answerText) => {
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/polls/${pollId}/open-answer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: 'user1', // TODO: Replace with actual user ID
+                  answerText
+                })
+              });
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+              setSubmittedAnswers(prev => ({ ...prev, [pollId]: true }));
+            } catch (e) {
+              console.error("Failed to submit answer:", e);
+              setError("Failed to submit answer. Please try again.");
+            }
+          };
+
+          // Update the PollEditor component to include poll type selection
+          function PollEditor({ initialData = null, onSave, onCancel }) {
+            const [question, setQuestion] = useState('');
+            const [options, setOptions] = useState(['', '']);
+            const [pollType, setPollType] = useState('single_choice');
+            const isEditing = initialData !== null;
+
+            useEffect(() => {
+              if (isEditing) {
+                setQuestion(initialData.question);
+                setOptions(initialData.options);
+                setPollType(initialData.poll_type);
+              } else {
+                setQuestion('');
+                setOptions(['', '']);
+                setPollType('single_choice');
               }
-          };
-          const handleAudiencePrevPoll = () => {
-              if (currentAudiencePollIndex > 0) {
-                  setCurrentAudiencePollIndex(currentAudiencePollIndex - 1);
+            }, [initialData, isEditing]);
+
+            const handleOptionChange = (index, value) => {
+              const newOptions = [...options];
+              newOptions[index] = value;
+              setOptions(newOptions);
+            };
+
+            const handleAddOption = () => {
+              if (options.length < 10) {
+                setOptions([...options, '']);
               }
-          };
+            };
 
-          // --- Speaker Handlers ---
-          const handleCreateNewClick = () => { setEditingPollId('new'); };
-          const handleEditClick = (pollId) => { setEditingPollId(pollId); };
-          const handleCancelEdit = () => { setEditingPollId(null); };
-          const handleSavePoll = (pollData) => { /* ... unchanged ... */ if (pollData.id) { setPolls(prevPolls => prevPolls.map(p => p.id === pollData.id ? { ...p, question: pollData.question, options: pollData.options } : p )); } else { const newPoll = { id: `p${Date.now()}`, question: pollData.question, options: pollData.options, results: pollData.options.reduce((acc, option) => { acc[option] = 0; return acc; }, {}), userAnswers: {}, totalVotes: 0, status: 'idle', }; setPolls(prevPolls => [...prevPolls, newPoll]); } setEditingPollId(null); };
-          const handleTogglePollStatus = (pollId) => { /* ... unchanged ... */ setPolls(prevPolls => { const currentPoll = prevPolls.find(p => p.id === pollId); if (!currentPoll) return prevPolls; let newStatus = 'idle'; if (currentPoll.status === 'idle') { newStatus = 'active'; } else if (currentPoll.status === 'active') { newStatus = 'ended'; } else { newStatus = 'idle'; } return prevPolls.map(p => p.id === pollId ? { ...p, status: newStatus } : p ); }); };
+            const handleRemoveOption = (index) => {
+              if (options.length > 2) {
+                const newOptions = options.filter((_, i) => i !== index);
+                setOptions(newOptions);
+              }
+            };
 
+            const handleSubmit = (e) => {
+              e.preventDefault();
+              const validOptions = options.map(o => o.trim()).filter(o => o !== '');
+              if (question.trim() && validOptions.length >= 2) {
+                onSave({
+                  id: isEditing ? initialData.id : undefined,
+                  question: question.trim(),
+                  options: validOptions,
+                  pollType
+                });
+              } else {
+                alert("Please provide a question and at least two non-empty answer options.");
+              }
+            };
+
+            return (
+              <form onSubmit={handleSubmit} className="space-y-4 p-4 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                <h3 className="text-lg font-medium text-gray-800">{isEditing ? 'Edit Poll' : 'Create New Poll'}</h3>
+                
+                <div>
+                  <label htmlFor="poll-question" className="block text-sm font-medium text-gray-700 mb-1">Question:</label>
+                  <input type="text" id="poll-question" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Enter poll question..." required className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Poll Type:</label>
+                  <select value={pollType} onChange={(e) => setPollType(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="single_choice">Single Choice</option>
+                    <option value="multiple_choice">Multiple Choice</option>
+                    <option value="open_answer">Open Answer</option>
+                  </select>
+                </div>
+
+                {pollType !== 'open_answer' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Answer Options:</label>
+                    {options.map((option, index) => (
+                      <div key={index} className="flex items-center gap-2 mb-2">
+                        <input type="text" value={option} onChange={(e) => handleOptionChange(index, e.target.value)} placeholder={`Option ${index + 1}`} required className="flex-grow border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" />
+                        {options.length > 2 && (
+                          <button type="button" onClick={() => handleRemoveOption(index)} className="text-red-600 hover:text-red-800 p-1" aria-label="Remove option">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {options.length < 10 && (
+                      <button type="button" onClick={handleAddOption} className="text-sm text-indigo-600 hover:text-indigo-800 mt-1">+ Add Option</button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={onCancel} className="flex-1 bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-md font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 transition-colors duration-150">Cancel</button>
+                  <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-md font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150">{isEditing ? 'Save Changes' : 'Create Poll'}</button>
+                </div>
+              </form>
+            );
+          }
+
+          // Update the PollResults component to handle different poll types
+          function PollResults({ poll, results }) {
+            if (!results || results.length === 0) {
+              return <p className="text-sm text-gray-500 italic mt-4">No responses yet.</p>;
+            }
+
+            if (poll.poll_type === 'open_answer') {
+              return (
+                <div className="mt-6 space-y-3">
+                  <h4 className="font-medium text-gray-700">Responses:</h4>
+                  <div className="space-y-2">
+                    {results.map((answer, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-md">
+                        <p className="text-gray-800">{answer.answer_text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
+            // For single and multiple choice polls
+            const totalVotes = results.length;
+            const voteCounts = poll.options.reduce((acc, option, index) => {
+              acc[index] = results.filter(r => r.selected_option_index === index).length;
+              return acc;
+            }, {});
+
+            return (
+              <div className="mt-6 space-y-3">
+                <h4 className="font-medium text-gray-700">Results ({totalVotes} total votes):</h4>
+                {poll.options.map((option, index) => {
+                  const count = voteCounts[index] || 0;
+                  const percentage = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(1) : 0;
+                  return (
+                    <div key={index} className="result-bar-bg">
+                      <span className="result-label">{option}</span>
+                      <div className="result-bar" style={{ width: `${percentage}%` }}>
+                        <span className="result-percentage">{percentage}%</span>&nbsp;({count})
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
 
           // --- Render Logic ---
           return (
@@ -513,11 +685,11 @@
                           <div>
                               {editingPollId !== null ? (
                                   // Show Editor when creating or editing
-                                  <PollEditor key={editingPollId} initialData={editingPollId === 'new' ? null : pollBeingEdited} onSave={handleSavePoll} onCancel={handleCancelEdit} />
+                                  <PollEditor key={editingPollId} initialData={editingPollId === 'new' ? null : polls.find(p => p.id === editingPollId)} onSave={handleCreatePoll} onCancel={() => setEditingPollId(null)} />
                               ) : (
                                   // Show Poll List and Create Button when not editing
                                   <div>
-                                      <button onClick={handleCreateNewClick} className="w-full mb-6 bg-indigo-600 text-white px-4 py-2 rounded-md font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150" > + Create New Poll </button>
+                                      <button onClick={() => setEditingPollId('new')} className="w-full mb-6 bg-indigo-600 text-white px-4 py-2 rounded-md font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150" > + Create New Poll </button>
                                       <h3 className="text-lg font-medium text-gray-700 mb-3">Manage Polls</h3>
                                       {polls.length === 0 ? ( <p className="text-center text-gray-500 py-4">No polls created yet.</p> ) : (
                                           <div className="space-y-3">
@@ -530,7 +702,7 @@
                                                           {poll.status !== 'idle' && <p className="text-xs text-gray-500 mt-1">{poll.totalVotes} vote(s)</p>}
                                                       </div>
                                                       <div className="flex gap-2 flex-shrink-0">
-                                                          <button onClick={() => handleEditClick(poll.id)} disabled={poll.status === 'active'} className="text-sm bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" > Edit </button>
+                                                          <button onClick={() => setEditingPollId(poll.id)} disabled={poll.status === 'active'} className="text-sm bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" > Edit </button>
                                                           <button onClick={() => handleTogglePollStatus(poll.id)} className={classNames( "text-sm text-white px-3 py-1 rounded-md transition-colors", poll.status === 'active' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600', poll.status === 'ended' && 'bg-gray-400 hover:bg-gray-500' )} > {poll.status === 'active' ? 'End Poll' : poll.status === 'ended' ? 'Reset' : 'Start Poll'} </button>
                                                       </div>
                                                   </div>
@@ -542,45 +714,26 @@
                           </div>
                       ) : (
                           // --- Audience View (Shows 'active' and 'ended' polls) ---
-                          visibleAudiencePolls.length === 0 ? ( // Check the filtered list
+                          polls.length === 0 ? ( // Check the filtered list
                               <p className="text-center text-gray-500 py-8">No polls are currently active or available to view.</p>
                           ) : (
                               <div>
-                                  {/* Audience Poll Navigation (uses filtered list length) */}
-                                  <div className="flex justify-between items-center mb-4">
-                                      <button
-                                          onClick={handleAudiencePrevPoll}
-                                          disabled={currentAudiencePollIndex === 0}
-                                          className="text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                          &larr; Previous
-                                      </button>
-                                      <span className="text-sm text-gray-500">Poll {currentAudiencePollIndex + 1} of {visibleAudiencePolls.length}</span>
-                                      <button
-                                          onClick={handleAudienceNextPoll}
-                                          disabled={currentAudiencePollIndex === visibleAudiencePolls.length - 1}
-                                          className="text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                          Next &rarr;
-                                      </button>
-                                  </div>
-
                                   {/* Display Current Audience Poll (from filtered list) */}
-                                  {currentAudiencePoll ? (
+                                  {polls.map(poll => (
                                       <>
-                                          <h3 className="text-xl font-semibold text-gray-800 mb-5 text-center">{currentAudiencePoll.question}</h3>
+                                          <h3 className="text-xl font-semibold text-gray-800 mb-5 text-center">{poll.question}</h3>
 
                                           {/* Poll Options - disable if not active */}
                                           <div className="space-y-3 mb-6">
-                                              {currentAudiencePoll.options.map(option => (
+                                              {poll.options.map((option, index) => (
                                                   <div
-                                                      key={option}
-                                                      onClick={() => handleSelectOption(option)}
+                                                      key={index}
+                                                      onClick={() => handleSubmitVote(poll.id, index)}
                                                       className={classNames(
                                                           'poll-option',
-                                                          selectedOption === option && !hasSubmittedCurrentAudiencePoll && currentAudiencePoll.status === 'active' && 'selected',
+                                                          submittedAnswers[poll.id] && 'selected',
                                                           // Disable interaction visually if submitted or not active
-                                                          (submittedAnswers[currentAudiencePoll.id] || currentAudiencePoll.status !== 'active') && 'disabled submitted'
+                                                          (submittedAnswers[poll.id] || poll.status !== 'active') && 'disabled submitted'
                                                       )}
                                                   >
                                                       {option}
@@ -589,38 +742,34 @@
                                           </div>
 
                                           {/* Submit Button (Show only if poll is active and not submitted) */}
-                                          {currentAudiencePoll.status === 'active' && !submittedAnswers[currentAudiencePoll.id] && (
+                                          {poll.status === 'active' && !submittedAnswers[poll.id] && (
                                               <button
-                                                  onClick={handleSubmitAnswer}
-                                                  disabled={!selectedOption}
+                                                  onClick={() => handleSubmitVote(poll.id, null)}
+                                                  disabled={!submittedAnswers[poll.id]}
                                                   className="w-full bg-green-600 text-white px-4 py-2 rounded-md font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                                               >
                                                   Submit Answer
                                               </button>
                                           )}
                                           {/* Submitted Message */}
-                                          {submittedAnswers[currentAudiencePoll.id] && (
+                                          {submittedAnswers[poll.id] && (
                                               <p className="text-center text-green-700 font-medium bg-green-100 p-3 rounded-md">Your answer for this poll has been submitted!</p>
                                           )}
                                           {/* Ended Message (if not submitted) */}
-                                           {currentAudiencePoll.status === 'ended' && !submittedAnswers[currentAudiencePoll.id] && (
+                                           {poll.status === 'ended' && !submittedAnswers[poll.id] && (
                                                <p className="text-center text-red-700 font-medium bg-red-100 p-3 rounded-md">This poll has ended.</p>
                                           )}
 
 
                                           {/* Results (Show only if poll status is 'ended') */}
-                                          {currentAudiencePoll.status === 'ended' && (
+                                          {poll.status === 'ended' && (
                                               <PollResults
-                                                  results={currentAudiencePoll.results}
-                                                  totalVotes={currentAudiencePoll.totalVotes}
-                                                  options={currentAudiencePoll.options}
+                                                  poll={poll}
+                                                  results={poll.results}
                                               />
                                           )}
                                       </>
-                                  ) : (
-                                      // Should not happen if visibleAudiencePolls.length > 0, but as a fallback
-                                      <p className="text-center text-gray-500 py-8">Could not load poll.</p>
-                                  )}
+                                  ))}
                               </div>
                           )
                       )}
