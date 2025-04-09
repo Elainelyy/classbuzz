@@ -671,7 +671,7 @@
               console.log("Submitting vote:", { 
                 pollId, 
                 selectedOption, 
-                selected_option_index: optionIndex
+                selectedOptionIndex: optionIndex
               });
               
               if (optionIndex === -1 && currentAudiencePoll?.poll_type !== 'open_ended') {
@@ -682,8 +682,8 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  user_id: 'user1', // Using snake_case to match the backend
-                  selected_option_index: optionIndex // Using snake_case to match the backend
+                  userId: 'user1', // Use camelCase as expected by the server
+                  selectedOptionIndex: optionIndex // Use camelCase as expected by the server
                 })
               });
               
@@ -716,8 +716,8 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  user_id: 'user1', // Using snake_case to match the backend
-                  answer_text: answerText // Using snake_case to match the backend
+                  userId: 'user1', // Use camelCase as expected by the server
+                  answerText: answerText // Use camelCase as expected by the server
                 })
               });
               
