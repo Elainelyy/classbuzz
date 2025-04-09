@@ -211,6 +211,101 @@ app.patch('/api/questions/:id/answer', async (req, res) => {
   }
 });
 
+// Poll endpoints
+app.get('/api/polls', async (req, res) => {
+  try {
+    const polls = await db.getAllPolls();
+    res.json(polls);
+  } catch (error) {
+    console.error('Error fetching polls:', error);
+    res.status(500).json({ error: 'Failed to fetch polls' });
+  }
+});
+
+app.post('/api/polls', async (req, res) => {
+  try {
+    const { question, options, poll_type } = req.body;
+    if (!question || !options || !poll_type) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const poll = await db.createPoll(question, options, poll_type);
+    res.status(201).json(poll);
+  } catch (error) {
+    console.error('Error creating poll:', error);
+    res.status(500).json({ error: 'Failed to create poll' });
+  }
+});
+
+app.patch('/api/polls/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+    const poll = await db.updatePollStatus(id, status);
+    res.json(poll);
+  } catch (error) {
+    console.error('Error updating poll status:', error);
+    res.status(500).json({ error: 'Failed to update poll status' });
+  }
+});
+
+app.post('/api/polls/:id/vote', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, selectedOptionIndex } = req.body;
+    if (userId === undefined || selectedOptionIndex === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const vote = await db.submitPollVote(id, userId, selectedOptionIndex);
+    res.status(201).json(vote);
+  } catch (error) {
+    console.error('Error submitting vote:', error);
+    res.status(500).json({ error: 'Failed to submit vote' });
+  }
+});
+
+app.post('/api/polls/:id/open-answer', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, answerText } = req.body;
+    if (!userId || !answerText) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const answer = await db.submitOpenAnswer(id, userId, answerText);
+    res.status(201).json(answer);
+  } catch (error) {
+    console.error('Error submitting open answer:', error);
+    res.status(500).json({ error: 'Failed to submit open answer' });
+  }
+});
+
+app.get('/api/polls/:id/results', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const poll = await db.getPollById(id);
+    if (!poll) {
+      return res.status(404).json({ error: 'Poll not found' });
+    }
+
+    let results;
+    if (poll.poll_type === 'open_answer') {
+      results = await db.getOpenAnswers(id);
+    } else {
+      results = await db.getPollVotes(id);
+    }
+
+    res.json({
+      poll,
+      results
+    });
+  } catch (error) {
+    console.error('Error fetching poll results:', error);
+    res.status(500).json({ error: 'Failed to fetch poll results' });
+  }
+});
+
 // --- Serve Frontend ---
 // Catch-all route to serve the main HTML file for any other GET request
 // that wasn't handled by express.static or the API routes.
