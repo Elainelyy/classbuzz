@@ -168,6 +168,36 @@ app.post('/api/polls', async (req, res) => {
   }
 });
 
+// Update poll details
+app.patch('/api/polls/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { question, options, poll_type } = req.body;
+    
+    if (!question || !poll_type) {
+      return res.status(400).json({ error: 'Question and poll type are required' });
+    }
+    
+    // Validate poll_type
+    if (!['single_choice', 'multiple_choice', 'open_ended'].includes(poll_type)) {
+      return res.status(400).json({ error: 'Invalid poll type' });
+    }
+    
+    // For non-open-ended polls, validate options
+    if (poll_type !== 'open_ended' && (!options || options.length < 2)) {
+      return res.status(400).json({ 
+        error: 'Non-open-ended polls require at least two options' 
+      });
+    }
+    
+    const updatedPoll = await db.updatePoll(id, { question, options, poll_type });
+    res.json(updatedPoll);
+  } catch (error) {
+    console.error('Error updating poll:', error);
+    res.status(500).json({ error: 'Failed to update poll' });
+  }
+});
+
 app.patch('/api/polls/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
