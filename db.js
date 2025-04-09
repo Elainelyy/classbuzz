@@ -116,6 +116,28 @@ async function updatePollStatus(pollId, status) {
   return result.rows[0];
 }
 
+// Function to delete a poll
+async function deletePoll(pollId) {
+  // First, delete related data in child tables
+  try {
+    // Delete poll votes
+    await pool.query('DELETE FROM poll_votes WHERE poll_id = $1', [pollId]);
+    
+    // Delete open answers
+    await pool.query('DELETE FROM poll_open_answers WHERE poll_id = $1', [pollId]);
+    
+    // Delete the poll itself
+    const query = 'DELETE FROM polls WHERE id = $1 RETURNING id';
+    const result = await pool.query(query, [pollId]);
+    
+    // Return true if a poll was deleted
+    return result.rowCount > 0;
+  } catch (error) {
+    console.error('Error in deletePoll:', error);
+    throw error;
+  }
+}
+
 // Poll votes functions
 async function submitPollVote(pollId, userId, selectedOptionIndex) {
   const query = `
@@ -163,6 +185,7 @@ module.exports = {
   getPollById,
   getAllPolls,
   updatePollStatus,
+  deletePoll,
   submitPollVote,
   getPollVotes,
   submitOpenAnswer,

@@ -238,6 +238,23 @@ app.get('/api/polls/:id/results', async (req, res) => {
   }
 });
 
+// DELETE endpoint to remove a poll
+app.delete('/api/polls/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.deletePoll(id);
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Poll not found' });
+    }
+    
+    res.status(200).json({ message: 'Poll deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting poll:', error);
+    res.status(500).json({ error: 'Failed to delete poll' });
+  }
+});
+
 // --- Serve Frontend ---
 // Catch-all route to serve the main HTML file for any other GET request
 // that wasn't handled by express.static or the API routes.
