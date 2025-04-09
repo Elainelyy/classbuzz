@@ -1,3 +1,14 @@
+const { Pool } = require('pg'); // Import PostgreSQL client
+
+// Create a connection pool using the DATABASE_URL environment variable
+// Heroku automatically sets DATABASE_URL. For local development, you'll need to set it.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Add SSL configuration for Heroku connections
+  // (Heroku requires SSL, but disable it for local connections unless you set up local SSL)
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
+
 // Poll-related functions
 async function createPoll(question, options, pollType) {
   const query = `
