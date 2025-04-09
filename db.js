@@ -9,6 +9,60 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
+// Question-related functions
+async function getAllQuestions() {
+  const query = `
+    SELECT 
+      q.id, 
+      q.text, 
+      q.votes, 
+      q.is_answered, 
+      q.created_at,
+      json_agg(
+        json_build_object(
+          'id', c.id,
+          'text', c.text,
+          'created_at', c.created_at
+        )
+      ) FILTER (WHERE c.id IS NOT NULL) as comments
+    FROM questions q
+    LEFT JOIN comments c ON q.id = c.question_id
+    GROUP BY q.id, q.text, q.votes, q.is_answered, q.created_at
+    ORDER BY q.is_answered ASC, q.votes DESC, q.created_at ASC
+  `;
+  const result = await pool.query(query);
+  
+  // Process the results to ensure comments is always an array
+  return result.rows.map(q => ({
+    ...q,
+    comments: q.comments || [] // Ensure comments is an array even if null
+  }));
+}
+
+async function createQuestion(text) {
+  const query = 'INSERT INTO questions (text) VALUES ($1) RETURNING id, text, votes, is_answered, created_at';
+  const result = await pool.query(query, [text.trim()]);
+  return result.rows[0];
+}
+
+async function voteQuestion(questionId) {
+  const query = 'UPDATE questions SET votes = votes + 1 WHERE id = $1 RETURNING id, votes';
+  const result = await pool.query(query, [questionId]);
+  return result.rows[0];
+}
+
+async function addCommentToQuestion(questionId, text) {
+  const query = 'INSERT INTO comments (question_id, text) VALUES ($1, $2) RETURNING id, question_id, text, created_at';
+  const result = await pool.query(query, [questionId, text.trim()]);
+  return result.rows[0];
+}
+
+async function updateQuestionAnsweredStatus(questionId, isAnswered) {
+  const query = 'UPDATE questions SET is_answered = $1 WHERE id = $2 RETURNING id, is_answered';
+  const result = await pool.query(query, [isAnswered, questionId]);
+  return result.rows[0];
+}
+
 // Poll-related functions
 async function createPoll(question, options, pollType) {
   const query = `
@@ -112,5 +166,10 @@ module.exports = {
   submitPollVote,
   getPollVotes,
   submitOpenAnswer,
-  getOpenAnswers
+  getOpenAnswers,
+  getAllQuestions,
+  createQuestion,
+  voteQuestion,
+  addCommentToQuestion,
+  updateQuestionAnsweredStatus
 }; 
