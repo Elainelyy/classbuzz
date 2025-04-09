@@ -26,7 +26,15 @@ async function getPollById(pollId) {
 
 async function getAllPolls() {
   const query = `
-    SELECT * FROM polls ORDER BY created_at DESC;
+    SELECT 
+      id,
+      question,
+      COALESCE(options, '{}'::TEXT[]) as options,
+      poll_type,
+      poll_status,
+      created_at
+    FROM polls 
+    ORDER BY created_at DESC;
   `;
   const result = await pool.query(query);
   return result.rows;
