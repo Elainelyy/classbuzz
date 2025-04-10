@@ -123,10 +123,10 @@
             display: flex;
             gap: 10px;
             margin-top: 20px;
+            justify-content: flex-end;
         }
 
         .form-actions button {
-            flex: 1;
             padding: 10px;
             border: none;
             border-radius: 4px;
@@ -582,13 +582,6 @@
                   {imageUrl && (
                     <div className="image-preview">
                       <img src={imageUrl} alt="Question" />
-                      <button 
-                        type="button" 
-                        className="remove-image"
-                        onClick={() => setImageUrl(null)}
-                      >
-                        Remove
-                      </button>
                     </div>
                   )}
                   <input
@@ -604,7 +597,7 @@
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
                   >
-                    {isUploading ? 'Uploading...' : 'Upload Image'}
+                    {isUploading ? 'Uploading...' : imageUrl ? 'Replace Image' : 'Upload Image'}
                   </button>
                 </div>
               </div>
@@ -660,11 +653,11 @@
               )}
 
               <div className="form-actions">
-                <button type="submit">
-                  {initialData ? 'Save Changes' : 'Create Poll'}
-                </button>
                 <button type="button" onClick={onCancel}>
                   Cancel
+                </button>
+                <button type="submit">
+                  {initialData ? 'Save Changes' : 'Create Poll'}
                 </button>
               </div>
             </form>
