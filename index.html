@@ -432,13 +432,12 @@
           }
 
           if (pollType === 'open_ended') {
-            // For open-ended polls, send an empty array 
-            // or a single placeholder option based on backend requirements
+            // For open-ended polls, send null for options
             onSave({
               id: isEditing ? initialData.id : undefined,
               question: question.trim(),
-              options: [], // The backend may require this to be NULL for open_ended polls
-              pollType: 'open_ended' // Ensure consistent naming
+              options: null, // Send null for open-ended polls
+              pollType: 'open_ended'
             });
             return;
           }
@@ -610,6 +609,23 @@
                 url = `${API_BASE_URL}/api/polls/${pollData.id}`;
                 method = 'PATCH';
               }
+
+              // Validate options array
+              if (pollData.pollType !== 'open_ended') {
+                if (!pollData.options || !Array.isArray(pollData.options)) {
+                  throw new Error('Options must be an array for non-open-ended polls');
+                }
+                const validOptions = pollData.options.filter(opt => opt.trim() !== '');
+                if (validOptions.length < 2) {
+                  throw new Error('At least two non-empty options are required');
+                }
+                if (new Set(validOptions).size !== validOptions.length) {
+                  throw new Error('Duplicate options are not allowed');
+                }
+              } else {
+                // For open-ended polls, ensure options is null
+                pollData.options = null;
+              }
               
               console.log(`${isEditing ? 'Updating' : 'Creating'} poll with data:`, {
                 question: pollData.question,
@@ -623,12 +639,13 @@
                 body: JSON.stringify({
                   question: pollData.question,
                   options: pollData.options,
-                  poll_type: pollData.pollType // Using snake_case to match the backend
+                  poll_type: pollData.pollType
                 })
               });
               
               if (!response.ok) {
                 const errorData = await response.json();
+                console.error('Server error response:', errorData);
                 throw new Error(errorData.error || 'Failed to save poll');
               }
               
