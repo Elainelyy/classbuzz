@@ -64,10 +64,10 @@ async function updateQuestionAnsweredStatus(questionId, isAnswered) {
 }
 
 // Poll-related functions
-async function createPoll(question, options, pollType) {
+async function createPoll(question, options, pollType, imageUrl = null) {
   const query = `
-    INSERT INTO polls (question, options, poll_type, poll_status, created_at)
-    VALUES ($1, $2, $3, 'idle', NOW())
+    INSERT INTO polls (question, options, poll_type, poll_status, image_url, created_at)
+    VALUES ($1, $2, $3, 'idle', $4, NOW())
     RETURNING *;
   `;
   // For open_ended polls, set options to NULL
@@ -75,7 +75,8 @@ async function createPoll(question, options, pollType) {
   const values = [
     question,
     pollType === 'open_ended' ? null : options,
-    pollType
+    pollType,
+    imageUrl
   ];
   const result = await pool.query(query, values);
   return result.rows[0];
@@ -117,7 +118,7 @@ async function updatePollStatus(pollId, status) {
 }
 
 // Update a poll
-const updatePoll = async (id, { question, options, poll_type }) => {
+const updatePoll = async (id, { question, options, poll_type, image_url }) => {
   // For open_ended polls, options should be NULL
   const pollOptions = poll_type === 'open_ended' ? null : options;
   
@@ -125,10 +126,11 @@ const updatePoll = async (id, { question, options, poll_type }) => {
     `UPDATE polls 
      SET question = $1, 
          options = $2, 
-         poll_type = $3::poll_type
+         poll_type = $3::poll_type,
+         image_url = $5
      WHERE id = $4
-     RETURNING id, question, options, poll_type, poll_status, created_at`,
-    [question, pollOptions, poll_type, id]
+     RETURNING id, question, options, poll_type, poll_status, image_url, created_at`,
+    [question, pollOptions, poll_type, id, image_url]
   );
   
   if (result.rows.length === 0) {

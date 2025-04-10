@@ -3,6 +3,8 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors'); // Import CORS middleware
 const db = require('./db'); // Import database functions
+const multer = require('multer');
+const fs = require('fs');
 
 // Create an Express application instance
 const app = express();
@@ -18,6 +20,38 @@ app.use(express.json());
 // Serve static files (like the main HTML) from the current directory
 // This will automatically serve index.html from the root path '/'
 app.use(express.static(__dirname));
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = 'uploads';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir);
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: function (req, file, cb) {
+    const filetypes = /jpeg|jpg|png|gif/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb(new Error('Only image files are allowed!'));
+  }
+});
+
+// Serve uploaded images
+app.use('/uploads', express.static('uploads'));
 
 // --- API Endpoints ---
 
@@ -156,11 +190,11 @@ app.get('/api/polls', async (req, res) => {
 
 app.post('/api/polls', async (req, res) => {
   try {
-    const { question, options, poll_type } = req.body;
-    if (!question || !options || !poll_type) {
+    const { question, options, poll_type, image_url } = req.body;
+    if (!question || !poll_type) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    const poll = await db.createPoll(question, options, poll_type);
+    const poll = await db.createPoll(question, options, poll_type, image_url);
     res.status(201).json(poll);
   } catch (error) {
     console.error('Error creating poll:', error);
@@ -172,7 +206,7 @@ app.post('/api/polls', async (req, res) => {
 app.patch('/api/polls/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { question, options, poll_type } = req.body;
+    const { question, options, poll_type, image_url } = req.body;
     
     if (!question || !poll_type) {
       return res.status(400).json({ error: 'Question and poll type are required' });
@@ -190,7 +224,7 @@ app.patch('/api/polls/:id', async (req, res) => {
       });
     }
     
-    const updatedPoll = await db.updatePoll(id, { question, options, poll_type });
+    const updatedPoll = await db.updatePoll(id, { question, options, poll_type, image_url });
     res.json(updatedPoll);
   } catch (error) {
     console.error('Error updating poll:', error);
@@ -283,6 +317,16 @@ app.delete('/api/polls/:id', async (req, res) => {
     console.error('Error deleting poll:', error);
     res.status(500).json({ error: 'Failed to delete poll' });
   }
+});
+
+// Image upload endpoint
+app.post('/api/upload', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  res.json({ 
+    imageUrl: `/uploads/${req.file.filename}` 
+  });
 });
 
 // --- Serve Frontend ---
