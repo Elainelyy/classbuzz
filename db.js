@@ -125,9 +125,9 @@ const updatePoll = async (id, { question, options, poll_type }) => {
     `UPDATE polls 
      SET question = $1, 
          options = $2, 
-         poll_type = $3
+         poll_type = $3::poll_type
      WHERE id = $4
-     RETURNING id, question, options, poll_type, status, created_at`,
+     RETURNING id, question, options, poll_type, poll_status, created_at`,
     [question, pollOptions, poll_type, id]
   );
   
