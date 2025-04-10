@@ -591,17 +591,29 @@
             }
           };
 
-          // Handle creating a new poll
-          const handleCreatePoll = async (pollData) => {
+          // Handle creating or updating a poll
+          const handleSavePoll = async (pollData) => {
             try {
-              console.log("Creating poll with data:", {
+              setIsLoading(true);
+              
+              const isEditing = !!pollData.id;
+              
+              let url = `${API_BASE_URL}/api/polls`;
+              let method = 'POST';
+              
+              if (isEditing) {
+                url = `${API_BASE_URL}/api/polls/${pollData.id}`;
+                method = 'PATCH';
+              }
+              
+              console.log(`${isEditing ? 'Updating' : 'Creating'} poll with data:`, {
                 question: pollData.question,
                 options: pollData.options,
                 poll_type: pollData.pollType
               });
               
-              const response = await fetch(`${API_BASE_URL}/api/polls`, {
-                method: 'POST',
+              const response = await fetch(url, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   question: pollData.question,
@@ -611,18 +623,36 @@
               });
               
               if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error("Server error response:", errorData); // Log server error if any
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to save poll');
               }
               
-              const newPoll = await response.json();
-              setPolls(prevPolls => [newPoll, ...prevPolls]);
+              if (isEditing) {
+                // Update the poll in the existing list
+                const updatedPoll = await response.json();
+                setPolls(polls.map(p => p.id === updatedPoll.id ? updatedPoll : p));
+              } else {
+                // Add the new poll to the list
+                fetchPolls();
+              }
+              
               setEditingPollId(null);
             } catch (e) {
-              console.error("Failed to create poll:", e);
-              setError("Failed to create poll: " + (e.message || "Please try again."));
+              console.error('Error saving poll:', e);
+              setError(e.message);
+            } finally {
+              setIsLoading(false);
             }
+          };
+
+          // Function to handle edit poll button click
+          const handleEditPoll = (poll) => {
+            setEditingPollId({
+              id: poll.id,
+              question: poll.question,
+              options: poll.options || [],
+              pollType: poll.poll_type
+            });
           };
 
           // Handle updating poll status
@@ -836,7 +866,7 @@
                             <div>
                                 {editingPollId !== null ? (
                                     // Show Editor when creating or editing
-                                    <PollEditor key={editingPollId} initialData={editingPollId === 'new' ? null : polls.find(p => p.id === editingPollId)} onSave={handleCreatePoll} onCancel={() => setEditingPollId(null)} />
+                                    <PollEditor key={editingPollId} initialData={editingPollId === 'new' ? null : polls.find(p => p.id === editingPollId)} onSave={handleSavePoll} onCancel={() => setEditingPollId(null)} />
                                 ) : (
                                     // Show Poll List and Create Button when not editing
                                     <div>
@@ -861,7 +891,7 @@
                                                         </div>
                                                         <div className="flex gap-2 flex-shrink-0">
                                                             <button 
-                                                                onClick={() => setEditingPollId(poll.id)} 
+                                                                onClick={() => handleEditPoll(poll)} 
                                                                 disabled={poll.poll_status === 'active'} 
                                                                 className="text-sm bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                                             >

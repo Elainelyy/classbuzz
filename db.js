@@ -116,6 +116,28 @@ async function updatePollStatus(pollId, status) {
   return result.rows[0];
 }
 
+// Update a poll
+const updatePoll = async (id, { question, options, poll_type }) => {
+  // For open_ended polls, options should be NULL
+  const pollOptions = poll_type === 'open_ended' ? null : options;
+  
+  const result = await pool.query(
+    `UPDATE polls 
+     SET question = $1, 
+         options = $2, 
+         poll_type = $3
+     WHERE id = $4
+     RETURNING id, question, options, poll_type, status, created_at`,
+    [question, pollOptions, poll_type, id]
+  );
+  
+  if (result.rows.length === 0) {
+    throw new Error('Poll not found');
+  }
+  
+  return result.rows[0];
+};
+
 // Function to delete a poll
 async function deletePoll(pollId) {
   // First, delete related data in child tables
@@ -185,6 +207,7 @@ module.exports = {
   getPollById,
   getAllPolls,
   updatePollStatus,
+  updatePoll,
   deletePoll,
   submitPollVote,
   getPollVotes,
