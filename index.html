@@ -801,7 +801,8 @@
               console.log(`${isEditing ? 'Updating' : 'Creating'} poll with data:`, {
                 question: pollData.question,
                 options: pollData.options,
-                poll_type: pollData.pollType
+                poll_type: pollData.pollType,
+                image_url: pollData.imageUrl
               });
               
               const response = await fetch(url, {
@@ -810,7 +811,8 @@
                 body: JSON.stringify({
                   question: pollData.question,
                   options: pollData.options,
-                  poll_type: pollData.pollType
+                  poll_type: pollData.pollType,
+                  image_url: pollData.imageUrl
                 })
               });
               
