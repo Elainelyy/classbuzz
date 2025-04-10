@@ -435,7 +435,7 @@
             // For open-ended polls, send an empty array 
             // or a single placeholder option based on backend requirements
             onSave({
-              id: isEditing ? initialData?.id : undefined,
+              id: isEditing ? initialData.id : undefined,
               question: question.trim(),
               options: [], // The backend may require this to be NULL for open_ended polls
               pollType: 'open_ended' // Ensure consistent naming
@@ -450,7 +450,7 @@
           }
 
           onSave({
-            id: isEditing ? initialData?.id : undefined,
+            id: isEditing ? initialData.id : undefined,
             question: question.trim(),
             options: validOptions,
             pollType
@@ -591,6 +591,11 @@
             }
           };
 
+          // Function to handle edit poll button click
+          const handleEditPoll = (poll) => {
+            setEditingPollId(poll.id);
+          };
+
           // Handle creating or updating a poll
           const handleSavePoll = async (pollData) => {
             try {
@@ -643,16 +648,6 @@
             } finally {
               setIsLoading(false);
             }
-          };
-
-          // Function to handle edit poll button click
-          const handleEditPoll = (poll) => {
-            setEditingPollId({
-              id: poll.id,
-              question: poll.question,
-              options: poll.options || [],
-              pollType: poll.poll_type
-            });
           };
 
           // Handle updating poll status
@@ -866,7 +861,12 @@
                             <div>
                                 {editingPollId !== null ? (
                                     // Show Editor when creating or editing
-                                    <PollEditor key={editingPollId} initialData={editingPollId === 'new' ? null : polls.find(p => p.id === editingPollId)} onSave={handleSavePoll} onCancel={() => setEditingPollId(null)} />
+                                    <PollEditor 
+                                        key={editingPollId} 
+                                        initialData={editingPollId === 'new' ? null : polls.find(p => p.id === editingPollId)} 
+                                        onSave={handleSavePoll} 
+                                        onCancel={() => setEditingPollId(null)} 
+                                    />
                                 ) : (
                                     // Show Poll List and Create Button when not editing
                                     <div>
