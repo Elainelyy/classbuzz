@@ -608,13 +608,72 @@
             <h2>{initialData ? 'Edit Poll' : 'Create New Poll'}</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label>Question</label>
+                <label>Question (optional if image is provided):</label>
                 <input
                   type="text"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
-                  required
                 />
+              </div>
+
+              <div className="form-group">
+                <label>Image (optional if question is provided):</label>
+                <div className="image-upload-container">
+                  {imagePreview && (
+                    <div className="image-preview-container">
+                      <img src={imagePreview} alt="Preview" className="image-preview" />
+                    </div>
+                  )}
+                  
+                  {isCropping && image && ReactCrop && (
+                    <div className="image-crop-container">
+                      <ReactCrop.default
+                        crop={crop}
+                        onChange={(c) => setCrop(c)}
+                        onComplete={handleCropComplete}
+                      >
+                        <img src={image} ref={imageRef} alt="Crop" />
+                      </ReactCrop.default>
+                      <div className="crop-controls">
+                        <button
+                          type="button"
+                          onClick={() => setIsCropping(false)}
+                          className="crop-button"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    className="upload-button"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {imagePreview ? 'Replace Image' : 'Upload Image'}
+                  </button>
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImage(null);
+                        setImagePreview(null);
+                        setIsCropping(false);
+                      }}
+                      className="remove-image"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="form-group">
@@ -663,61 +722,6 @@
                   >
                     Add Option
                   </button>
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>Image (Optional)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  ref={fileInputRef}
-                  style={{ display: 'none' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="upload-button"
-                >
-                  Upload Image
-                </button>
-                {imagePreview && (
-                  <div className="image-preview">
-                    <img src={imagePreview} alt="Preview" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImage(null);
-                        setImagePreview(null);
-                        setIsCropping(false);
-                      }}
-                      className="remove-image"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {isCropping && image && ReactCrop && (
-                <div className="crop-modal">
-                  <div className="crop-container">
-                    <ReactCrop.default
-                      crop={crop}
-                      onChange={(c) => setCrop(c)}
-                      onComplete={handleCropComplete}
-                    >
-                      <img src={image} ref={imageRef} alt="Crop" />
-                    </ReactCrop.default>
-                    <button
-                      type="button"
-                      onClick={() => setIsCropping(false)}
-                      className="done-cropping"
-                    >
-                      Done
-                    </button>
-                  </div>
                 </div>
               )}
 
