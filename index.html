@@ -554,9 +554,15 @@
         const handleSubmit = (e) => {
           e.preventDefault();
           
+          // Validate that either question or image is provided
+          if (!question.trim() && !imageUrl) {
+            alert('Please provide either a question or an image');
+            return;
+          }
+
           if (pollType === 'open_ended') {
             onSave({
-              question,
+              question: question.trim(),
               options: null,
               pollType,
               imageUrl
@@ -572,7 +578,7 @@
           }
 
           onSave({
-            question,
+            question: question.trim(),
             options: validOptions,
             pollType,
             imageUrl
@@ -583,22 +589,34 @@
           <div className="poll-editor">
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label htmlFor="question">Question:</label>
+                <label htmlFor="question">Question (optional if image is provided):</label>
                 <input
                   type="text"
                   id="question"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
-                  required
                 />
               </div>
 
               <div className="form-group">
-                <label>Image (optional):</label>
+                <label>Image (optional if question is provided):</label>
                 <div className="image-upload-container">
                   {imageUrl && (
                     <div className="image-preview">
                       <img src={imageUrl} alt="Question" />
+                      <button
+                        type="button"
+                        className="remove-image"
+                        onClick={() => {
+                          setImageUrl(null);
+                          // If no question is provided, show a warning
+                          if (!question.trim()) {
+                            alert('Please provide a question or keep the image');
+                          }
+                        }}
+                      >
+                        Remove
+                      </button>
                     </div>
                   )}
                   <input

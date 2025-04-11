@@ -184,10 +184,17 @@ app.get('/api/polls', async (req, res) => {
 app.post('/api/polls', async (req, res) => {
   try {
     const { question, options, poll_type, image_url } = req.body;
-    if (!question || !poll_type) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    
+    // Validate that at least one of question or image_url is provided
+    if (!question && !image_url) {
+      return res.status(400).json({ error: 'Either question or image must be provided' });
     }
-    const poll = await db.createPoll(question, options, poll_type, image_url);
+    
+    if (!poll_type) {
+      return res.status(400).json({ error: 'Poll type is required' });
+    }
+
+    const poll = await db.createPoll(question || '', options, poll_type, image_url);
     res.status(201).json(poll);
   } catch (error) {
     console.error('Error creating poll:', error);
