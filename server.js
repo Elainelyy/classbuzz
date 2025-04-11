@@ -329,13 +329,12 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
             ContentType: req.file.mimetype
         });
 
-        // Upload to S3
+        // Upload to S3 without ACL
         const command = new PutObjectCommand({
             Bucket: process.env.AWS_S3_BUCKET_NAME,
             Key: fileName,
             Body: req.file.buffer,
-            ContentType: req.file.mimetype,
-            ACL: 'public-read'
+            ContentType: req.file.mimetype
         });
 
         const result = await s3Client.send(command);
