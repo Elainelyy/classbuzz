@@ -5,7 +5,7 @@ const cors = require('cors'); // Import CORS middleware
 const db = require('./db'); // Import database functions
 const multer = require('multer');
 const fs = require('fs');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Create an Express application instance
 const app = express();
@@ -21,6 +21,13 @@ const s3Client = new S3Client({
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
     }
 });
+
+// Function to extract S3 key from image URL
+function extractS3KeyFromUrl(imageUrl) {
+    if (!imageUrl) return null;
+    const url = new URL(imageUrl);
+    return url.pathname.substring(1); // Remove leading slash
+}
 
 // Configure multer for memory storage (we'll upload directly to S3)
 const upload = multer({
@@ -302,21 +309,39 @@ app.get('/api/polls/:id/results', async (req, res) => {
   }
 });
 
-// DELETE endpoint to remove a poll
+// Delete a poll
 app.delete('/api/polls/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await db.deletePoll(id);
-    
-    if (!result) {
-      return res.status(404).json({ error: 'Poll not found' });
+    try {
+        // First get the poll to check if it has an image
+        const poll = await db.getPollById(req.params.id);
+        if (!poll) {
+            return res.status(404).json({ error: 'Poll not found' });
+        }
+
+        // If poll has an image, delete it from S3
+        if (poll.image_url) {
+            const s3Key = extractS3KeyFromUrl(poll.image_url);
+            if (s3Key) {
+                try {
+                    await s3Client.send(new DeleteObjectCommand({
+                        Bucket: process.env.AWS_BUCKET_NAME,
+                        Key: s3Key
+                    }));
+                    console.log(`Successfully deleted image from S3: ${s3Key}`);
+                } catch (s3Error) {
+                    console.error('Error deleting image from S3:', s3Error);
+                    // Continue with poll deletion even if image deletion fails
+                }
+            }
+        }
+
+        // Delete the poll from the database
+        await db.deletePoll(req.params.id);
+        res.status(204).send();
+    } catch (error) {
+        console.error('Error deleting poll:', error);
+        res.status(500).json({ error: 'Failed to delete poll' });
     }
-    
-    res.status(200).json({ message: 'Poll deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting poll:', error);
-    res.status(500).json({ error: 'Failed to delete poll' });
-  }
 });
 
 // Update the upload endpoint
