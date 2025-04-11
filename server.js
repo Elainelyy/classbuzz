@@ -22,15 +22,6 @@ AWS.config.update({
 
 const s3 = new AWS.S3();
 
-// --- Middleware ---
-// Enable CORS for all origins (adjust in production if needed)
-app.use(cors());
-// Enable Express to parse JSON request bodies
-app.use(express.json());
-// Serve static files (like the main HTML) from the current directory
-// This will automatically serve index.html from the root path '/'
-app.use(express.static(__dirname));
-
 // Configure multer for memory storage (we'll upload directly to S3)
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -46,8 +37,14 @@ const upload = multer({
     }
 });
 
-// Serve uploaded images
-app.use('/uploads', express.static('uploads'));
+// --- Middleware ---
+// Enable CORS for all origins (adjust in production if needed)
+app.use(cors());
+// Enable Express to parse JSON request bodies
+app.use(express.json());
+// Serve static files (like the main HTML) from the current directory
+// This will automatically serve index.html from the root path '/'
+app.use(express.static(__dirname));
 
 // --- API Endpoints ---
 
@@ -321,10 +318,16 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
         }
-
+        
         // Generate a unique filename
         const fileExtension = path.extname(req.file.originalname);
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}${fileExtension}`;
+
+        console.log('Attempting to upload to S3 with params:', {
+            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Key: fileName,
+            ContentType: req.file.mimetype
+        });
 
         // Upload to S3
         const params = {
@@ -336,6 +339,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         };
 
         const result = await s3.upload(params).promise();
+        console.log('S3 upload successful:', result.Location);
 
         // Return the S3 URL
         res.json({ 
@@ -343,6 +347,12 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         });
     } catch (error) {
         console.error('Error uploading to S3:', error);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            region: process.env.AWS_REGION,
+            bucket: process.env.AWS_S3_BUCKET_NAME
+        });
         res.status(500).json({ error: error.message });
     }
 });

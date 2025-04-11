@@ -495,6 +495,7 @@
         const [pollType, setPollType] = useState('single_choice');
         const [imageUrl, setImageUrl] = useState(null);
         const [isUploading, setIsUploading] = useState(false);
+        const [error, setError] = useState(null);
         const fileInputRef = useRef(null);
 
         useEffect(() => {
@@ -507,42 +508,44 @@
           }
         }, [initialData]);
 
-        const handleImageUpload = async (event) => {
-          const file = event.target.files[0];
+        const handleImageUpload = async (e) => {
+          const file = e.target.files[0];
           if (!file) return;
 
-          // Validate file type
-          if (!file.type.match(/image\/(jpeg|png|gif|jpg)/)) {
-            alert('Please select a valid image file (JPEG, PNG, or GIF)');
+          // Check file type
+          if (!file.type.match(/^image\/(jpeg|jpg|png|gif)$/)) {
+            setError('Please upload a valid image file (JPEG, PNG, or GIF)');
             return;
           }
 
-          // Validate file size (5MB limit)
+          // Check file size (5MB limit)
           if (file.size > 5 * 1024 * 1024) {
-            alert('File size must be less than 5MB');
+            setError('Image size should be less than 5MB');
             return;
           }
 
-          setIsUploading(true);
           const formData = new FormData();
           formData.append('image', file);
 
           try {
+            setIsUploading(true);
             const response = await fetch(`${API_BASE_URL}/api/upload`, {
               method: 'POST',
               body: formData
             });
 
             if (!response.ok) {
-              throw new Error('Failed to upload image');
+              const errorData = await response.json();
+              throw new Error(errorData.error || 'Failed to upload image');
             }
 
             const data = await response.json();
             // The imageUrl will now be a full S3 URL
             setImageUrl(data.imageUrl);
-          } catch (error) {
-            console.error('Error uploading image:', error);
-            alert('Failed to upload image. Please try again.');
+            setError(null);
+          } catch (err) {
+            console.error('Error uploading image:', err);
+            setError(err.message || 'Failed to upload image');
           } finally {
             setIsUploading(false);
           }
