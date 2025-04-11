@@ -73,26 +73,14 @@
         }
 
         .image-preview {
-            margin-bottom: 10px;
-            position: relative;
-        }
-
-        .image-preview img {
-            max-width: 100%;
+            max-width: 200px;
             max-height: 200px;
+            margin-top: 10px;
             border-radius: 4px;
         }
 
         .remove-image {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: rgba(255, 0, 0, 0.8);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
-            cursor: pointer;
+            display: none;
         }
 
         .upload-button {
@@ -602,21 +590,8 @@
                 <label>Image (optional if question is provided):</label>
                 <div className="image-upload-container">
                   {imageUrl && (
-                    <div className="image-preview">
-                      <img src={imageUrl} alt="Question" />
-                      <button
-                        type="button"
-                        className="remove-image"
-                        onClick={() => {
-                          setImageUrl(null);
-                          // If no question is provided, show a warning
-                          if (!question.trim()) {
-                            alert('Please provide a question or keep the image');
-                          }
-                        }}
-                      >
-                        Remove
-                      </button>
+                    <div className="image-preview-container">
+                      <img src={imageUrl} alt="Preview" className="image-preview" />
                     </div>
                   )}
                   <input
