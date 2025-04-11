@@ -170,7 +170,9 @@
     <div id="root"></div>
     <script type="text/babel">
       const { useState, useEffect, useMemo, useCallback, useRef } = React;
-      const ReactCrop = window.ReactCrop.default;
+      
+      // Initialize ReactCrop after ensuring it's loaded
+      const ReactCrop = window.ReactCrop ? window.ReactCrop.default : null;
 
       // Base URL for API - relative to current domain
       const API_BASE_URL = '';
@@ -512,133 +514,66 @@
       }
 
       function PollEditor({ onSave, onCancel, initialData }) {
-        const [question, setQuestion] = useState('');
-        const [options, setOptions] = useState(['', '']);
-        const [pollType, setPollType] = useState('single_choice');
-        const [imageUrl, setImageUrl] = useState(null);
-        const [isUploading, setIsUploading] = useState(false);
-        const [error, setError] = useState(null);
-        const [crop, setCrop] = useState({ aspect: 1 });
-        const [imageSrc, setImageSrc] = useState(null);
+        const [question, setQuestion] = useState(initialData?.question || '');
+        const [options, setOptions] = useState(initialData?.options || ['', '']);
+        const [pollType, setPollType] = useState(initialData?.poll_type || 'single_choice');
+        const [image, setImage] = useState(initialData?.image_url || null);
+        const [imagePreview, setImagePreview] = useState(initialData?.image_url || null);
+        const [isCropping, setIsCropping] = useState(false);
+        const [crop, setCrop] = useState({ aspect: 16 / 9 });
         const [croppedImage, setCroppedImage] = useState(null);
-        const fileInputRef = useRef(null);
         const imageRef = useRef(null);
+        const fileInputRef = useRef(null);
 
-        useEffect(() => {
-          if (initialData) {
-            setQuestion(initialData.question);
-            setOptions(initialData.options || ['', '']);
-            setPollType(initialData.poll_type);
-            setImageUrl(initialData.image_url);
-          }
-        }, [initialData]);
-
-        const onImageLoad = (img) => {
-          imageRef.current = img;
-        };
-
-        const getCroppedImg = (image, crop) => {
-          const canvas = document.createElement('canvas');
-          const scaleX = image.naturalWidth / image.width;
-          const scaleY = image.naturalHeight / image.height;
-          canvas.width = crop.width;
-          canvas.height = crop.height;
-          const ctx = canvas.getContext('2d');
-
-          ctx.drawImage(
-            image,
-            crop.x * scaleX,
-            crop.y * scaleY,
-            crop.width * scaleX,
-            crop.height * scaleY,
-            0,
-            0,
-            crop.width,
-            crop.height
-          );
-
-          return new Promise((resolve) => {
-            canvas.toBlob((blob) => {
-              resolve(blob);
-            }, 'image/jpeg', 0.95);
-          });
-        };
-
-        const handleImageUpload = async (e) => {
+        const handleImageUpload = (e) => {
           const file = e.target.files[0];
-          if (!file) return;
-
-          // Check file type
-          if (!file.type.match(/^image\/(jpeg|jpg|png|gif)$/)) {
-            setError('Please upload a valid image file (JPEG, PNG, or GIF)');
-            return;
-          }
-
-          // Check file size (5MB limit)
-          if (file.size > 5 * 1024 * 1024) {
-            setError('Image size should be less than 5MB');
-            return;
-          }
-
-          const reader = new FileReader();
-          reader.addEventListener('load', () => {
-            setImageSrc(reader.result);
-            setCrop({ aspect: 1 });
-          });
-          reader.readAsDataURL(file);
-        };
-
-        const handleCropComplete = async (crop) => {
-          if (imageRef.current && crop.width && crop.height) {
-            const croppedImageBlob = await getCroppedImg(imageRef.current, crop);
-            setCroppedImage(URL.createObjectURL(croppedImageBlob));
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              setImage(e.target.result);
+              setImagePreview(e.target.result);
+              setIsCropping(true);
+            };
+            reader.readAsDataURL(file);
           }
         };
 
-        const handleUploadCroppedImage = async () => {
-          if (!croppedImage) return;
+        const handleCropComplete = (croppedArea, croppedAreaPixels) => {
+          if (!image || !croppedAreaPixels) return;
 
-          try {
-            setIsUploading(true);
-            const response = await fetch(croppedImage);
-            const blob = await response.blob();
-            
-            const formData = new FormData();
-            formData.append('image', blob, 'cropped-image.jpg');
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const imageObj = new Image();
 
-            const uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
-              method: 'POST',
-              body: formData
-            });
+          imageObj.onload = () => {
+            canvas.width = croppedAreaPixels.width;
+            canvas.height = croppedAreaPixels.height;
 
-            if (!uploadResponse.ok) {
-              const errorData = await uploadResponse.json();
-              throw new Error(errorData.error || 'Failed to upload image');
-            }
+            ctx.drawImage(
+              imageObj,
+              croppedAreaPixels.x,
+              croppedAreaPixels.y,
+              croppedAreaPixels.width,
+              croppedAreaPixels.height,
+              0,
+              0,
+              croppedAreaPixels.width,
+              croppedAreaPixels.height
+            );
 
-            const data = await uploadResponse.json();
-            setImageUrl(data.imageUrl);
-            setImageSrc(null);
-            setCroppedImage(null);
-            setError(null);
-          } catch (err) {
-            console.error('Error uploading cropped image:', err);
-            setError(err.message || 'Failed to upload image');
-          } finally {
-            setIsUploading(false);
-          }
-        };
+            const croppedImageUrl = canvas.toDataURL('image/jpeg');
+            setCroppedImage(croppedImageUrl);
+            setImagePreview(croppedImageUrl);
+          };
 
-        const handleCancelCrop = () => {
-          setImageSrc(null);
-          setCroppedImage(null);
+          imageObj.src = image;
         };
 
         const handleSubmit = (e) => {
           e.preventDefault();
           
           // Validate that either question or image is provided
-          if (!question.trim() && !imageUrl) {
+          if (!question.trim() && !image) {
             alert('Please provide either a question or an image');
             return;
           }
@@ -648,7 +583,7 @@
               question: question.trim(),
               options: null,
               pollType,
-              imageUrl
+              imageUrl: image
             });
             return;
           }
@@ -664,98 +599,27 @@
             question: question.trim(),
             options: validOptions,
             pollType,
-            imageUrl
+            imageUrl: image
           });
         };
 
         return (
           <div className="poll-editor">
+            <h2>{initialData ? 'Edit Poll' : 'Create New Poll'}</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label htmlFor="question">Question (optional if image is provided):</label>
+                <label>Question</label>
                 <input
                   type="text"
-                  id="question"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
+                  required
                 />
               </div>
 
               <div className="form-group">
-                <label>Image (optional if question is provided):</label>
-                <div className="image-upload-container">
-                  {imageUrl && (
-                    <div className="image-preview-container">
-                      <img src={imageUrl} alt="Preview" className="image-preview" />
-                    </div>
-                  )}
-                  
-                  {imageSrc && (
-                    <div className="image-crop-container">
-                      <ReactCrop.default
-                        crop={crop}
-                        onChange={c => setCrop(c)}
-                        onComplete={handleCropComplete}
-                        aspect={1}
-                      >
-                        <img
-                          ref={onImageLoad}
-                          src={imageSrc}
-                          alt="Crop me"
-                          style={{ maxWidth: '100%' }}
-                        />
-                      </ReactCrop.default>
-                      {croppedImage && (
-                        <div>
-                          <h4>Preview</h4>
-                          <img src={croppedImage} alt="Cropped" className="crop-preview" />
-                        </div>
-                      )}
-                      <div className="crop-controls">
-                        <button
-                          type="button"
-                          className="crop-button"
-                          onClick={handleUploadCroppedImage}
-                          disabled={isUploading || !croppedImage}
-                        >
-                          {isUploading ? 'Uploading...' : 'Upload Cropped Image'}
-                        </button>
-                        <button
-                          type="button"
-                          className="crop-button cancel"
-                          onClick={handleCancelCrop}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    style={{ display: 'none' }}
-                  />
-                  <button
-                    type="button"
-                    className="upload-button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading || imageSrc}
-                  >
-                    {isUploading ? 'Uploading...' : imageUrl ? 'Replace Image' : 'Upload Image'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="pollType">Poll Type:</label>
-                <select
-                  id="pollType"
-                  value={pollType}
-                  onChange={(e) => setPollType(e.target.value)}
-                >
+                <label>Poll Type</label>
+                <select value={pollType} onChange={(e) => setPollType(e.target.value)}>
                   <option value="single_choice">Single Choice</option>
                   <option value="multiple_choice">Multiple Choice</option>
                   <option value="open_ended">Open Ended</option>
@@ -764,7 +628,7 @@
 
               {pollType !== 'open_ended' && (
                 <div className="form-group">
-                  <label>Options:</label>
+                  <label>Options</label>
                   {options.map((option, index) => (
                     <div key={index} className="option-input">
                       <input
@@ -776,6 +640,7 @@
                           setOptions(newOptions);
                         }}
                         placeholder={`Option ${index + 1}`}
+                        required
                       />
                       {options.length > 2 && (
                         <button
@@ -784,8 +649,9 @@
                             const newOptions = options.filter((_, i) => i !== index);
                             setOptions(newOptions);
                           }}
+                          className="remove-option"
                         >
-                          Remove
+                          ×
                         </button>
                       )}
                     </div>
@@ -793,18 +659,74 @@
                   <button
                     type="button"
                     onClick={() => setOptions([...options, ''])}
+                    className="add-option"
                   >
                     Add Option
                   </button>
                 </div>
               )}
 
+              <div className="form-group">
+                <label>Image (Optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="upload-button"
+                >
+                  Upload Image
+                </button>
+                {imagePreview && (
+                  <div className="image-preview">
+                    <img src={imagePreview} alt="Preview" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImage(null);
+                        setImagePreview(null);
+                        setIsCropping(false);
+                      }}
+                      className="remove-image"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {isCropping && image && ReactCrop && (
+                <div className="crop-modal">
+                  <div className="crop-container">
+                    <ReactCrop.default
+                      crop={crop}
+                      onChange={(c) => setCrop(c)}
+                      onComplete={handleCropComplete}
+                    >
+                      <img src={image} ref={imageRef} alt="Crop" />
+                    </ReactCrop.default>
+                    <button
+                      type="button"
+                      onClick={() => setIsCropping(false)}
+                      className="done-cropping"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="form-actions">
-                <button type="button" onClick={onCancel}>
+                <button type="button" onClick={onCancel} className="cancel-button">
                   Cancel
                 </button>
-                <button type="submit">
-                  {initialData ? 'Save Changes' : 'Create Poll'}
+                <button type="submit" className="save-button">
+                  {initialData ? 'Update Poll' : 'Create Poll'}
                 </button>
               </div>
             </form>
