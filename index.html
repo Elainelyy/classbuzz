@@ -219,15 +219,8 @@
     <script type="text/babel">
       const { useState, useEffect, useMemo, useCallback, useRef } = React;
       
-      // Initialize ReactCrop
-      const ReactCrop = window.ReactCrop;
-      if (!ReactCrop) {
-        console.error('ReactCrop is not loaded');
-        return;
-      }
-
       // Base URL for API - relative to current domain
-      const API_BASE_URL = '';
+      const API_BASE_URL = window.location.origin;
 
       // --- Utility Functions ---
       function classNames(...classes) { return classes.filter(Boolean).join(' '); }
@@ -566,6 +559,13 @@
       }
 
       function PollEditor({ onSave, onCancel, initialData }) {
+        // Initialize ReactCrop
+        const ReactCrop = window.ReactCrop;
+        if (!ReactCrop) {
+          console.error('ReactCrop is not loaded');
+          return null;
+        }
+
         const [question, setQuestion] = useState(initialData?.question || '');
         const [options, setOptions] = useState(initialData?.options || ['', '']);
         const [pollType, setPollType] = useState(initialData?.poll_type || 'single_choice');
