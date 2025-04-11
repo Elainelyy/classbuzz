@@ -631,7 +631,7 @@
               question: question.trim(),
               options: null,
               pollType,
-              imageUrl: image
+              imageUrl: imagePreview
             });
             return;
           }
@@ -647,7 +647,7 @@
             question: question.trim(),
             options: validOptions,
             pollType,
-            imageUrl: image
+            imageUrl: imagePreview
           });
         };
 
@@ -673,7 +673,7 @@
                     </div>
                   )}
                   
-                  {isCropping && image && ReactCrop && (
+                  {isCropping && image && (
                     <div className="image-crop-container">
                       <ReactCrop.default
                         crop={crop}
@@ -691,7 +691,12 @@
                       <div className="crop-controls">
                         <button
                           type="button"
-                          onClick={() => setIsCropping(false)}
+                          onClick={() => {
+                            setIsCropping(false);
+                            if (croppedImage) {
+                              setImagePreview(croppedImage);
+                            }
+                          }}
                           className="crop-button"
                         >
                           Done Cropping
@@ -722,6 +727,7 @@
                           setImage(null);
                           setImagePreview(null);
                           setIsCropping(false);
+                          setCroppedImage(null);
                         }}
                         className="remove-image"
                       >
