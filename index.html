@@ -8,6 +8,8 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react-image-crop/dist/ReactCrop.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css">
      <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -129,6 +131,37 @@
         .form-actions button[type="button"] {
             background: #f44336;
             color: white;
+        }
+
+        .image-crop-container {
+            max-width: 100%;
+            margin: 20px 0;
+        }
+
+        .crop-preview {
+            max-width: 200px;
+            max-height: 200px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+
+        .crop-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .crop-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .crop-button.cancel {
+            background: #f44336;
         }
      </style>
 </head>
@@ -484,17 +517,51 @@
         const [imageUrl, setImageUrl] = useState(null);
         const [isUploading, setIsUploading] = useState(false);
         const [error, setError] = useState(null);
+        const [crop, setCrop] = useState({ aspect: 1 });
+        const [imageSrc, setImageSrc] = useState(null);
+        const [croppedImage, setCroppedImage] = useState(null);
         const fileInputRef = useRef(null);
+        const imageRef = useRef(null);
 
         useEffect(() => {
           if (initialData) {
             setQuestion(initialData.question);
             setOptions(initialData.options || ['', '']);
             setPollType(initialData.poll_type);
-            // Ensure the image URL is properly set from S3
             setImageUrl(initialData.image_url);
           }
         }, [initialData]);
+
+        const onImageLoad = (img) => {
+          imageRef.current = img;
+        };
+
+        const getCroppedImg = (image, crop) => {
+          const canvas = document.createElement('canvas');
+          const scaleX = image.naturalWidth / image.width;
+          const scaleY = image.naturalHeight / image.height;
+          canvas.width = crop.width;
+          canvas.height = crop.height;
+          const ctx = canvas.getContext('2d');
+
+          ctx.drawImage(
+            image,
+            crop.x * scaleX,
+            crop.y * scaleY,
+            crop.width * scaleX,
+            crop.height * scaleY,
+            0,
+            0,
+            crop.width,
+            crop.height
+          );
+
+          return new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+              resolve(blob);
+            }, 'image/jpeg', 0.95);
+          });
+        };
 
         const handleImageUpload = async (e) => {
           const file = e.target.files[0];
@@ -512,31 +579,58 @@
             return;
           }
 
-          const formData = new FormData();
-          formData.append('image', file);
+          const reader = new FileReader();
+          reader.addEventListener('load', () => {
+            setImageSrc(reader.result);
+            setCrop({ aspect: 1 });
+          });
+          reader.readAsDataURL(file);
+        };
+
+        const handleCropComplete = async (crop) => {
+          if (imageRef.current && crop.width && crop.height) {
+            const croppedImageBlob = await getCroppedImg(imageRef.current, crop);
+            setCroppedImage(URL.createObjectURL(croppedImageBlob));
+          }
+        };
+
+        const handleUploadCroppedImage = async () => {
+          if (!croppedImage) return;
 
           try {
             setIsUploading(true);
-            const response = await fetch(`${API_BASE_URL}/api/upload`, {
+            const response = await fetch(croppedImage);
+            const blob = await response.blob();
+            
+            const formData = new FormData();
+            formData.append('image', blob, 'cropped-image.jpg');
+
+            const uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
               method: 'POST',
               body: formData
             });
 
-            if (!response.ok) {
-              const errorData = await response.json();
+            if (!uploadResponse.ok) {
+              const errorData = await uploadResponse.json();
               throw new Error(errorData.error || 'Failed to upload image');
             }
 
-            const data = await response.json();
-            // The imageUrl will now be a full S3 URL
+            const data = await uploadResponse.json();
             setImageUrl(data.imageUrl);
+            setImageSrc(null);
+            setCroppedImage(null);
             setError(null);
           } catch (err) {
-            console.error('Error uploading image:', err);
+            console.error('Error uploading cropped image:', err);
             setError(err.message || 'Failed to upload image');
           } finally {
             setIsUploading(false);
           }
+        };
+
+        const handleCancelCrop = () => {
+          setImageSrc(null);
+          setCroppedImage(null);
         };
 
         const handleSubmit = (e) => {
@@ -594,6 +688,48 @@
                       <img src={imageUrl} alt="Preview" className="image-preview" />
                     </div>
                   )}
+                  
+                  {imageSrc && (
+                    <div className="image-crop-container">
+                      <ReactCrop
+                        crop={crop}
+                        onChange={c => setCrop(c)}
+                        onComplete={handleCropComplete}
+                        aspect={1}
+                      >
+                        <img
+                          ref={onImageLoad}
+                          src={imageSrc}
+                          alt="Crop me"
+                          style={{ maxWidth: '100%' }}
+                        />
+                      </ReactCrop>
+                      {croppedImage && (
+                        <div>
+                          <h4>Preview</h4>
+                          <img src={croppedImage} alt="Cropped" className="crop-preview" />
+                        </div>
+                      )}
+                      <div className="crop-controls">
+                        <button
+                          type="button"
+                          className="crop-button"
+                          onClick={handleUploadCroppedImage}
+                          disabled={isUploading || !croppedImage}
+                        >
+                          {isUploading ? 'Uploading...' : 'Upload Cropped Image'}
+                        </button>
+                        <button
+                          type="button"
+                          className="crop-button cancel"
+                          onClick={handleCancelCrop}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -605,7 +741,7 @@
                     type="button"
                     className="upload-button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
+                    disabled={isUploading || imageSrc}
                   >
                     {isUploading ? 'Uploading...' : imageUrl ? 'Replace Image' : 'Upload Image'}
                   </button>
