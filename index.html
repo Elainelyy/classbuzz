@@ -136,18 +136,24 @@
         .image-crop-container {
             max-width: 100%;
             margin: 20px 0;
+            position: relative;
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
         }
 
-        .crop-preview {
-            max-width: 200px;
-            max-height: 200px;
-            margin-top: 10px;
-            border-radius: 4px;
+        .image-crop-container img {
+            max-width: 100%;
+            max-height: 400px;
+            display: block;
+            margin: 0 auto;
         }
 
         .crop-controls {
-            margin-top: 10px;
+            margin-top: 20px;
             display: flex;
+            justify-content: center;
             gap: 10px;
         }
 
@@ -158,10 +164,52 @@
             padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
+            font-weight: 500;
         }
 
-        .crop-button.cancel {
+        .crop-button:hover {
+            background: #45a049;
+        }
+
+        .image-preview-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-right: 10px;
+        }
+
+        .upload-button:hover {
+            background: #45a049;
+        }
+
+        .remove-image {
             background: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .remove-image:hover {
+            background: #d32f2f;
         }
      </style>
 </head>
@@ -631,6 +679,7 @@
                         crop={crop}
                         onChange={(c) => setCrop(c)}
                         onComplete={handleCropComplete}
+                        aspect={16/9}
                       >
                         <img src={image} ref={imageRef} alt="Crop" />
                       </ReactCrop.default>
@@ -640,39 +689,41 @@
                           onClick={() => setIsCropping(false)}
                           className="crop-button"
                         >
-                          Done
+                          Done Cropping
                         </button>
                       </div>
                     </div>
                   )}
 
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    style={{ display: 'none' }}
-                  />
-                  <button
-                    type="button"
-                    className="upload-button"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {imagePreview ? 'Replace Image' : 'Upload Image'}
-                  </button>
-                  {imagePreview && (
+                  <div style={{ marginTop: '10px' }}>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      style={{ display: 'none' }}
+                    />
                     <button
                       type="button"
-                      onClick={() => {
-                        setImage(null);
-                        setImagePreview(null);
-                        setIsCropping(false);
-                      }}
-                      className="remove-image"
+                      className="upload-button"
+                      onClick={() => fileInputRef.current?.click()}
                     >
-                      Remove
+                      {imagePreview ? 'Replace Image' : 'Upload Image'}
                     </button>
-                  )}
+                    {imagePreview && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImage(null);
+                          setImagePreview(null);
+                          setIsCropping(false);
+                        }}
+                        className="remove-image"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
