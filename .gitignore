@@ -24,4 +24,4 @@ yarn-error.log*
 
 # Logs
 logs
-*.log
+*.loglocal_directory/
