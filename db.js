@@ -98,6 +98,7 @@ async function getAllPolls() {
       COALESCE(options, '{}'::TEXT[]) as options,
       poll_type,
       poll_status,
+      image_url,
       created_at
     FROM polls 
     ORDER BY created_at DESC;
