@@ -5,7 +5,7 @@ const cors = require('cors'); // Import CORS middleware
 const db = require('./db'); // Import database functions
 const multer = require('multer');
 const fs = require('fs');
-const AWS = require('aws-sdk');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 // Create an Express application instance
 const app = express();
@@ -13,23 +13,14 @@ const app = express();
 // Define the port the server will listen on.
 const port = process.env.PORT || 3000;
 
-// Configure AWS
-AWS.config.update({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION
+// Configure AWS S3 client
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }
 });
-
-const s3 = new AWS.S3();
-
-// --- Middleware ---
-// Enable CORS for all origins (adjust in production if needed)
-app.use(cors());
-// Enable Express to parse JSON request bodies
-app.use(express.json());
-// Serve static files (like the main HTML) from the current directory
-// This will automatically serve index.html from the root path '/'
-app.use(express.static(__dirname));
 
 // Configure multer for memory storage (we'll upload directly to S3)
 const upload = multer({
@@ -46,8 +37,14 @@ const upload = multer({
     }
 });
 
-// Serve uploaded images
-app.use('/uploads', express.static('uploads'));
+// --- Middleware ---
+// Enable CORS for all origins (adjust in production if needed)
+app.use(cors());
+// Enable Express to parse JSON request bodies
+app.use(express.json());
+// Serve static files (like the main HTML) from the current directory
+// This will automatically serve index.html from the root path '/'
+app.use(express.static(__dirname));
 
 // --- API Endpoints ---
 
@@ -321,28 +318,44 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
         }
-
+        
         // Generate a unique filename
         const fileExtension = path.extname(req.file.originalname);
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}${fileExtension}`;
 
+        console.log('Attempting to upload to S3 with params:', {
+            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Key: fileName,
+            ContentType: req.file.mimetype
+        });
+
         // Upload to S3
-        const params = {
+        const command = new PutObjectCommand({
             Bucket: process.env.AWS_S3_BUCKET_NAME,
             Key: fileName,
             Body: req.file.buffer,
             ContentType: req.file.mimetype,
-            ACL: 'public-read' // Make the file publicly accessible
-        };
+            ACL: 'public-read'
+        });
 
-        const result = await s3.upload(params).promise();
+        const result = await s3Client.send(command);
+        console.log('S3 upload successful:', result);
+
+        // Construct the S3 URL
+        const imageUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
 
         // Return the S3 URL
         res.json({ 
-            imageUrl: result.Location 
+            imageUrl: imageUrl 
         });
     } catch (error) {
         console.error('Error uploading to S3:', error);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            region: process.env.AWS_REGION,
+            bucket: process.env.AWS_S3_BUCKET_NAME
+        });
         res.status(500).json({ error: error.message });
     }
 });
