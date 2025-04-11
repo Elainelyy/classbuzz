@@ -222,6 +222,12 @@
       // Base URL for API - relative to current domain
       const API_BASE_URL = window.location.origin;
 
+      // Initialize ReactCrop
+      const ReactCrop = window.ReactCrop?.default || window.ReactCrop;
+      if (!ReactCrop) {
+        console.error('ReactCrop is not loaded. Please check if the script is properly loaded.');
+      }
+
       // --- Utility Functions ---
       function classNames(...classes) { return classes.filter(Boolean).join(' '); }
 
@@ -559,13 +565,6 @@
       }
 
       function PollEditor({ onSave, onCancel, initialData }) {
-        // Initialize ReactCrop
-        const ReactCrop = window.ReactCrop;
-        if (!ReactCrop) {
-          console.error('ReactCrop is not loaded');
-          return null;
-        }
-
         const [question, setQuestion] = useState(initialData?.question || '');
         const [options, setOptions] = useState(initialData?.options || ['', '']);
         const [pollType, setPollType] = useState(initialData?.poll_type || 'single_choice');
@@ -576,6 +575,14 @@
         const [croppedImage, setCroppedImage] = useState(null);
         const imageRef = useRef(null);
         const fileInputRef = useRef(null);
+        const [isReactCropLoaded, setIsReactCropLoaded] = useState(false);
+
+        // Check if ReactCrop is loaded
+        useEffect(() => {
+          if (window.ReactCrop) {
+            setIsReactCropLoaded(true);
+          }
+        }, []);
 
         const handleImageUpload = (e) => {
           const file = e.target.files[0];
@@ -584,7 +591,11 @@
             reader.onload = (e) => {
               setImage(e.target.result);
               setImagePreview(e.target.result);
-              setIsCropping(true);
+              if (isReactCropLoaded) {
+                setIsCropping(true);
+              } else {
+                alert('Image cropping is not available at the moment. Please try again later.');
+              }
             };
             reader.readAsDataURL(file);
           }
@@ -677,7 +688,7 @@
                     </div>
                   )}
                   
-                  {isCropping && image && (
+                  {isCropping && image && isReactCropLoaded && (
                     <div className="image-crop-container">
                       <ReactCrop
                         crop={crop}
