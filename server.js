@@ -312,17 +312,29 @@ app.get('/api/polls/:id/results', async (req, res) => {
 // Delete a poll
 app.delete('/api/polls/:id', async (req, res) => {
     try {
+        console.log('Starting poll deletion for ID:', req.params.id);
+        
         // First get the poll to check if it has an image
         const poll = await db.getPollById(req.params.id);
+        console.log('Retrieved poll:', poll);
+        
         if (!poll) {
             return res.status(404).json({ error: 'Poll not found' });
         }
 
         // If poll has an image, delete it from S3
         if (poll.image_url) {
+            console.log('Poll has image URL:', poll.image_url);
             const s3Key = extractS3KeyFromUrl(poll.image_url);
+            console.log('Extracted S3 key:', s3Key);
+            
             if (s3Key) {
                 try {
+                    console.log('Attempting to delete from S3 with params:', {
+                        Bucket: process.env.AWS_BUCKET_NAME,
+                        Key: s3Key
+                    });
+                    
                     await s3Client.send(new DeleteObjectCommand({
                         Bucket: process.env.AWS_BUCKET_NAME,
                         Key: s3Key
@@ -330,16 +342,26 @@ app.delete('/api/polls/:id', async (req, res) => {
                     console.log(`Successfully deleted image from S3: ${s3Key}`);
                 } catch (s3Error) {
                     console.error('Error deleting image from S3:', s3Error);
+                    console.error('S3 Error details:', {
+                        message: s3Error.message,
+                        code: s3Error.code,
+                        statusCode: s3Error.statusCode
+                    });
                     // Continue with poll deletion even if image deletion fails
                 }
+            } else {
+                console.log('Could not extract S3 key from URL');
             }
+        } else {
+            console.log('Poll has no image URL');
         }
 
         // Delete the poll from the database
+        console.log('Deleting poll from database');
         await db.deletePoll(req.params.id);
         res.status(204).send();
     } catch (error) {
-        console.error('Error deleting poll:', error);
+        console.error('Error in delete poll endpoint:', error);
         res.status(500).json({ error: 'Failed to delete poll' });
     }
 });
