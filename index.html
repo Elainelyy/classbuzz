@@ -10,10 +10,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/react-image-crop/dist/ReactCrop.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css">
-    <script>
-      // Initialize ReactCrop
-      const { ReactCrop } = window.ReactCrop;
-    </script>
     <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -174,6 +170,7 @@
     <div id="root"></div>
     <script type="text/babel">
       const { useState, useEffect, useMemo, useCallback, useRef } = React;
+      const ReactCrop = window.ReactCrop.default;
 
       // Base URL for API - relative to current domain
       const API_BASE_URL = '';
