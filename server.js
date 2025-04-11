@@ -331,12 +331,12 @@ app.delete('/api/polls/:id', async (req, res) => {
             if (s3Key) {
                 try {
                     console.log('Attempting to delete from S3 with params:', {
-                        Bucket: process.env.AWS_BUCKET_NAME,
+                        Bucket: process.env.AWS_S3_BUCKET_NAME,
                         Key: s3Key
                     });
                     
                     await s3Client.send(new DeleteObjectCommand({
-                        Bucket: process.env.AWS_BUCKET_NAME,
+                        Bucket: process.env.AWS_S3_BUCKET_NAME,
                         Key: s3Key
                     }));
                     console.log(`Successfully deleted image from S3: ${s3Key}`);
