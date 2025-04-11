@@ -502,6 +502,7 @@
             setQuestion(initialData.question);
             setOptions(initialData.options || ['', '']);
             setPollType(initialData.poll_type);
+            // Ensure the image URL is properly set from S3
             setImageUrl(initialData.image_url);
           }
         }, [initialData]);
@@ -509,6 +510,18 @@
         const handleImageUpload = async (event) => {
           const file = event.target.files[0];
           if (!file) return;
+
+          // Validate file type
+          if (!file.type.match(/image\/(jpeg|png|gif|jpg)/)) {
+            alert('Please select a valid image file (JPEG, PNG, or GIF)');
+            return;
+          }
+
+          // Validate file size (5MB limit)
+          if (file.size > 5 * 1024 * 1024) {
+            alert('File size must be less than 5MB');
+            return;
+          }
 
           setIsUploading(true);
           const formData = new FormData();
@@ -525,6 +538,7 @@
             }
 
             const data = await response.json();
+            // The imageUrl will now be a full S3 URL
             setImageUrl(data.imageUrl);
           } catch (error) {
             console.error('Error uploading image:', error);

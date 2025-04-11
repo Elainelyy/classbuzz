@@ -5,12 +5,22 @@ const cors = require('cors'); // Import CORS middleware
 const db = require('./db'); // Import database functions
 const multer = require('multer');
 const fs = require('fs');
+const AWS = require('aws-sdk');
 
 // Create an Express application instance
 const app = express();
 
 // Define the port the server will listen on.
 const port = process.env.PORT || 3000;
+
+// Configure AWS
+AWS.config.update({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION
+});
+
+const s3 = new AWS.S3();
 
 // --- Middleware ---
 // Enable CORS for all origins (adjust in production if needed)
@@ -21,33 +31,19 @@ app.use(express.json());
 // This will automatically serve index.html from the root path '/'
 app.use(express.static(__dirname));
 
-// Configure multer for image uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir);
+// Configure multer for memory storage (we'll upload directly to S3)
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: function (req, file, cb) {
+        // Only allow image files
+        if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+            return cb(new Error('Only image files are allowed!'), false);
+        }
+        cb(null, true);
     }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: function (req, file, cb) {
-    const filetypes = /jpeg|jpg|png|gif/;
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    }
-    cb(new Error('Only image files are allowed!'));
-  }
 });
 
 // Serve uploaded images
@@ -319,14 +315,36 @@ app.delete('/api/polls/:id', async (req, res) => {
   }
 });
 
-// Image upload endpoint
-app.post('/api/upload', upload.single('image'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-  res.json({ 
-    imageUrl: `/uploads/${req.file.filename}` 
-  });
+// Update the upload endpoint
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Generate a unique filename
+        const fileExtension = path.extname(req.file.originalname);
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}${fileExtension}`;
+
+        // Upload to S3
+        const params = {
+            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Key: fileName,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype,
+            ACL: 'public-read' // Make the file publicly accessible
+        };
+
+        const result = await s3.upload(params).promise();
+
+        // Return the S3 URL
+        res.json({ 
+            imageUrl: result.Location 
+        });
+    } catch (error) {
+        console.error('Error uploading to S3:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // --- Serve Frontend ---
