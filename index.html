@@ -695,7 +695,7 @@
                   
                   {imageSrc && (
                     <div className="image-crop-container">
-                      <ReactCrop
+                      <ReactCrop.default
                         crop={crop}
                         onChange={c => setCrop(c)}
                         onComplete={handleCropComplete}
@@ -707,7 +707,7 @@
                           alt="Crop me"
                           style={{ maxWidth: '100%' }}
                         />
-                      </ReactCrop>
+                      </ReactCrop.default>
                       {croppedImage && (
                         <div>
                           <h4>Preview</h4>
