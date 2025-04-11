@@ -667,7 +667,7 @@
               <div className="form-group">
                 <label>Image (optional if question is provided):</label>
                 <div className="image-upload-container">
-                  {imagePreview && (
+                  {imagePreview && !isCropping && (
                     <div className="image-preview-container">
                       <img src={imagePreview} alt="Preview" className="image-preview" />
                     </div>
@@ -681,7 +681,12 @@
                         onComplete={handleCropComplete}
                         aspect={16/9}
                       >
-                        <img src={image} ref={imageRef} alt="Crop" />
+                        <img 
+                          src={image} 
+                          ref={imageRef} 
+                          alt="Crop" 
+                          style={{ maxWidth: '100%', maxHeight: '400px' }}
+                        />
                       </ReactCrop.default>
                       <div className="crop-controls">
                         <button
