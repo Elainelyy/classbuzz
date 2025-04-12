@@ -8,9 +8,8 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/react-image-crop/dist/ReactCrop.umd.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css" />
+    <script src="https://unpkg.com/react-image-crop@9/dist/ReactCrop.umd.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/react-image-crop@9/dist/ReactCrop.css" />
      <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -262,11 +261,6 @@
       // --- Utility Functions ---
       function classNames(...classes) { return classes.filter(Boolean).join(' '); }
 
-      // --- Mock Data ---
-      const initialPollsData = [
-          { id: 'p1', question: 'What is your favorite programming language?', options: ['JavaScript', 'Python', 'Java', 'C++'], results: { 'JavaScript': 15, 'Python': 25, 'Java': 8, 'C++': 5 }, userAnswers: {}, totalVotes: 53 , status: 'idle'}, // Store user answers keyed by a user ID (simulated)
-          { id: 'p2', question: 'Which topic should we cover next week?', options: ['Async/Await', 'Database Indexing', 'WebSockets'], results: { 'Async/Await': 12, 'Database Indexing': 18, 'WebSockets': 9 }, userAnswers: {}, totalVotes: 39, status: 'idle'},
-      ];
       // --- Components ---
       function Comment({ comment }) {
         // Display relative time for comments (optional enhancement)
