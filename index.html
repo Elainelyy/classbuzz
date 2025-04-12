@@ -881,10 +881,13 @@
           }
           
           try {
-            // Get cropped canvas from CropperJS
+            // Get cropped canvas from CropperJS with high quality settings
             const croppedCanvas = cropperInstanceRef.current.getCroppedCanvas({
               imageSmoothingEnabled: true,
               imageSmoothingQuality: 'high',
+              maxWidth: 1200, // Limit maximum dimensions for reasonable file sizes
+              maxHeight: 1200,
+              fillColor: '#fff' // Use white background for transparency
             });
             
             if (!croppedCanvas) {
@@ -892,8 +895,18 @@
               return;
             }
             
-            // Convert to data URL
-            const croppedImageDataUrl = croppedCanvas.toDataURL('image/jpeg');
+            // Convert to high-quality JPEG data URL (0.9 quality)
+            const croppedImageDataUrl = croppedCanvas.toDataURL('image/jpeg', 0.9);
+            
+            // Ensure we have a valid data URL that's not too large
+            if (!croppedImageDataUrl || croppedImageDataUrl.length < 22) { // "data:image/jpeg;base64," is 22 chars
+              setError("Invalid image data produced. Please try again.");
+              return;
+            }
+            
+            console.log("Cropped image created successfully:", 
+                      "Size:", Math.round(croppedImageDataUrl.length/1024), "KB", 
+                      "Preview:", croppedImageDataUrl.substring(0, 50) + "...");
             
             // Set as the preview image
             setImagePreview(croppedImageDataUrl);
@@ -963,18 +976,34 @@
             }
           }
 
+          // Debug imagePreview
+          console.log("Image Preview Type:", typeof imagePreview, 
+                     "Length:", imagePreview ? imagePreview.length : 0,
+                     "Starts with:", imagePreview ? imagePreview.substring(0, 30) + "..." : "null");
+          
+          // Format poll data for submission
           const pollData = {
             id: poll ? poll.id : null,
             question: question.trim(),
             options: pollType === 'open_ended' ? [] : options.map(opt => opt.trim()).filter(opt => opt !== ''),
             pollType: pollType,
-            // Include image data only if a *new* cropped image exists
-            // If imagePreview holds an existing URL (from editing), don't resend image data unless a new one was uploaded/cropped
-            imageDataUrl: (imagePreview && imagePreview.startsWith('data:image')) ? imagePreview : null,
-            // Keep existing image URL if no new image was provided
-            existingImageUrl: (!imagePreview && poll && poll.image_url) ? poll.image_url : (imagePreview && !imagePreview.startsWith('data:image')) ? imagePreview : null
+            // For base64 image data, make sure we have the full string with proper format
+            imageDataUrl: imagePreview && imagePreview.startsWith('data:') ? imagePreview : null,
+            // Only include existingImageUrl if editing and using an existing S3 image
+            existingImageUrl: (!imagePreview && poll && poll.image_url) ? poll.image_url : 
+                             (imagePreview && !imagePreview.startsWith('data:')) ? imagePreview : null
           };
 
+          // Debug the final data being sent
+          console.log("Submitting poll data:", {
+            id: pollData.id,
+            question: pollData.question,
+            options: pollData.options,
+            pollType: pollData.pollType,
+            hasImageData: pollData.imageDataUrl ? true : false,
+            imageDataLength: pollData.imageDataUrl ? pollData.imageDataUrl.length : 0,
+            existingImageUrl: pollData.existingImageUrl
+          });
 
           try {
             await onSave(pollData);
@@ -986,6 +1015,7 @@
                 handleRemoveImage();
              }
           } catch (saveError) {
+            console.error("Poll save error:", saveError);
             setError(saveError.message || 'Failed to save poll');
           } finally {
             setIsLoading(false);
@@ -1262,7 +1292,7 @@
                 method = 'PATCH';
               }
 
-              // Validate options array (Keep this validation)
+              // Validate options array
               if (pollData.pollType !== 'open_ended') {
                 if (!pollData.options || !Array.isArray(pollData.options)) {
                   throw new Error('Options must be an array for non-open-ended polls');
@@ -1273,35 +1303,58 @@
                 }
                 if (new Set(validOptions).size !== validOptions.length) {
                   throw new Error('Duplicate options are not allowed');
-                  }
+                }
               } else {
-                // For open-ended polls, ensure options is null or empty array based on backend expectation
-                 pollData.options = pollData.options || []; // Ensure it's at least an empty array if null
+                // For open-ended polls, ensure options is an empty array
+                pollData.options = pollData.options || [];
+              }
+
+              // Validate that either question or image is provided
+              if (!pollData.question && !pollData.imageDataUrl && !pollData.existingImageUrl) {
+                throw new Error('Either question or image must be provided');
+              }
+              
+              // Check if image data is valid when present
+              if (pollData.imageDataUrl && 
+                  (!pollData.imageDataUrl.startsWith('data:image/') && 
+                   !pollData.imageDataUrl.startsWith('data:application/'))) {
+                throw new Error('Invalid image data format');
               }
 
               console.log(`${isEditing ? 'Updating' : 'Creating'} poll with data:`, {
-                question: pollData.question,
+                question: pollData.question || "(No question text)",
                 options: pollData.options,
                 poll_type: pollData.pollType,
-                imageDataUrl: pollData.imageDataUrl ? '[Base64 Data Present]' : null, // Log presence, not the data
-                existingImageUrl: pollData.existingImageUrl
+                hasImageData: pollData.imageDataUrl ? true : false, 
+                imageDataSize: pollData.imageDataUrl ? Math.round(pollData.imageDataUrl.length/1024) + "KB" : "N/A",
+                existingImageUrl: pollData.existingImageUrl || "(None)"
               });
+
+              // Prepare request body - ensure we're sending the right fields
+              const requestBody = {
+                question: pollData.question,
+                options: pollData.options,
+                poll_type: pollData.pollType
+              };
+              
+              // Only include image data if it exists
+              if (pollData.imageDataUrl) {
+                requestBody.imageDataUrl = pollData.imageDataUrl;
+              }
+              
+              // Only include existing URL if needed
+              if (pollData.existingImageUrl) {
+                requestBody.existingImageUrl = pollData.existingImageUrl;
+              }
 
               const response = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
-                // Send the correct image data fields to the backend
-                body: JSON.stringify({
-                  question: pollData.question,
-                  options: pollData.options,
-                  poll_type: pollData.pollType,
-                  imageDataUrl: pollData.imageDataUrl, // Send new base64 data if available
-                  existingImageUrl: pollData.existingImageUrl // Send existing URL if no new image/cleared
-                })
+                body: JSON.stringify(requestBody)
               });
 
               if (!response.ok) {
-                const errorData = await response.json().catch(() => ({})); // Try to parse error JSON
+                const errorData = await response.json().catch(() => ({}));
                 console.error('Server error response:', errorData);
                 throw new Error(errorData.error || `Failed to save poll (Status: ${response.status})`);
               }
@@ -1319,7 +1372,7 @@
               }
 
               // Success: Refetch polls to update the list
-              await fetchPolls(); // Use await if fetchPolls is async
+              await fetchPolls();
               setEditingPollId(null); // Close the editor
 
             } catch (e) {
