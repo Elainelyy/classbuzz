@@ -1014,7 +1014,7 @@
           setError(null);
 
           // Basic validation
-          if (!question.trim() && !imagePreview) {
+          if (!question.trim() && !imagePreview && !image) {
              setError('Please provide a question or upload an image/PDF.');
              setIsLoading(false);
              return;
@@ -1034,6 +1034,12 @@
             }
           }
 
+          // If currently cropping and image exists but no imagePreview, use the original image
+          if (isCropping && image && !imagePreview) {
+            // Use original image automatically
+            await handleUseOriginalImage();
+          }
+
           // Verify image data
           if (imagePreview) {
             console.log("Image data format check:", 
@@ -1049,10 +1055,19 @@
             pollType: pollType
           };
           
-          // Include image data if available (entire data URL for backend processing)
+          // Include image data if available, with compression to avoid 413 Payload Too Large errors
           if (imagePreview && imagePreview.startsWith('data:')) {
-            pollData.imageDataUrl = imagePreview; // Send the full data URL
-            console.log("Including image data in request");
+            // Compress the image before sending if it's large
+            try {
+              const compressedImage = await compressImage(imagePreview);
+              pollData.imageDataUrl = compressedImage;
+              console.log("Including compressed image data in request");
+            } catch (err) {
+              console.error("Error compressing image:", err);
+              setError("Failed to compress image. The file may be too large.");
+              setIsLoading(false);
+              return;
+            }
           } else if (poll && poll.image_url) {
             // If editing and no new image, keep the existing one
             pollData.existingImageUrl = poll.image_url;
@@ -1085,6 +1100,82 @@
           }
         };
 
+        // Add an image compression function to reduce file size
+        const compressImage = (dataUrl) => {
+          return new Promise((resolve, reject) => {
+            try {
+              const img = new Image();
+              img.onload = () => {
+                // Create a canvas to draw the compressed image
+                const canvas = document.createElement('canvas');
+                
+                // Calculate dimensions (max 1000px width/height while maintaining aspect ratio)
+                let width = img.width;
+                let height = img.height;
+                const maxDimension = 1000;
+                
+                if (width > maxDimension || height > maxDimension) {
+                  if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                  } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                  }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Draw the image on the canvas with the new dimensions
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Get the compressed data URL (0.7 compression quality for JPEGs)
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                
+                console.log("Image compression:", 
+                           "Original size:", Math.round(dataUrl.length/1024), "KB", 
+                           "Compressed size:", Math.round(compressedDataUrl.length/1024), "KB",
+                           "Reduction:", Math.round((1 - compressedDataUrl.length/dataUrl.length) * 100) + "%");
+                
+                resolve(compressedDataUrl);
+              };
+              
+              img.onerror = () => {
+                reject(new Error("Failed to load image for compression"));
+              };
+              
+              img.src = dataUrl;
+            } catch (err) {
+              reject(err);
+            }
+          });
+        };
+
+        // Make handleUseOriginalImage return a promise to support await in handleSubmit
+        const handleUseOriginalImage = () => {
+          return new Promise((resolve) => {
+            if (!image) {
+              setError("No image available.");
+              resolve(false);
+              return;
+            }
+            
+            // Set the original image as the preview
+            setImagePreview(image);
+            setIsCropping(false);
+            setCompletedCrop(true);
+            
+            // Cleanup cropper
+            if (cropperInstanceRef.current) {
+              cropperInstanceRef.current.destroy();
+              cropperInstanceRef.current = null;
+            }
+            
+            resolve(true);
+          });
+        };
 
         // --- Render ---
         return (
