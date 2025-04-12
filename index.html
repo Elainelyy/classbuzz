@@ -280,6 +280,49 @@
         .pdf-navigation span {
           font-weight: bold;
         }
+        
+        /* Poll Editor Styles */
+        .poll-editor .form-group {
+          margin-bottom: 15px;
+        }
+        
+        .poll-editor .image-crop-container .crop-controls {
+          display: flex;
+          justify-content: center;
+          margin-top: 15px;
+          gap: 10px;
+        }
+        
+        .poll-editor .crop-button,
+        .poll-editor .use-original-button,
+        .poll-editor .cancel-crop-button {
+          padding: 8px 15px;
+          border: none;
+          border-radius: 4px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+        
+        .poll-editor .crop-button {
+          background-color: #4caf50;
+          color: white;
+        }
+        
+        .poll-editor .use-original-button {
+          background-color: #2196F3;
+          color: white;
+        }
+        
+        .poll-editor .cancel-crop-button {
+          background-color: #f44336;
+          color: white;
+        }
+        
+        .poll-editor .crop-button:disabled,
+        .poll-editor .use-original-button:disabled {
+          background-color: #cccccc;
+          cursor: not-allowed;
+        }
      </style>
 </head>
 <body>
@@ -836,6 +879,25 @@
           }
         };
 
+        // Add a new function to use the original image without cropping
+        const handleUseOriginalImage = () => {
+          if (!image) {
+            setError("No image available.");
+            return;
+          }
+          
+          // Set the original image as the preview
+          setImagePreview(image);
+          setIsCropping(false);
+          setCompletedCrop(true);
+          
+          // Cleanup cropper
+          if (cropperInstanceRef.current) {
+            cropperInstanceRef.current.destroy();
+            cropperInstanceRef.current = null;
+          }
+        };
+
         const handleRemoveImage = () => {
           // Revoke existing object URLs if they exist
           if (image && image.startsWith('blob:')) {
@@ -1094,7 +1156,15 @@
                                    >
                                        Apply Crop
                                    </button>
-                                    <button type="button" onClick={handleRemoveImage} className="cancel-crop-button">Cancel</button>
+                                   <button 
+                                       type="button" 
+                                       onClick={handleUseOriginalImage} 
+                                       className="use-original-button"
+                                       disabled={isRenderingPdf}
+                                   >
+                                       Use Original
+                                   </button>
+                                   <button type="button" onClick={handleRemoveImage} className="cancel-crop-button">Cancel</button>
                                </div>
                           </div>
                       ) : (
