@@ -8,8 +8,11 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/react-image-crop@9/dist/ReactCrop.umd.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/react-image-crop@9/dist/ReactCrop.css" />
+    <!-- Fix for ReactCrop - use a specific version and correct file path -->
+    <script src="https://unpkg.com/react-image-crop@8.6.6/dist/ReactCrop.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/react-image-crop@8.6.6/dist/ReactCrop.css" />
+    <!-- Fix for PDF.js - use more reliable CDN link -->
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/build/pdf.min.js"></script>
      <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -254,7 +257,7 @@
     <div id="root"></div>
     <script type="text/babel">
       const { useState, useEffect, useMemo, useCallback, useRef } = React;
-      
+
       // Base URL for API - relative to current domain
       const API_BASE_URL = window.location.origin;
 
