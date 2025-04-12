@@ -74,87 +74,51 @@
             margin-top: 10px;
         }
 
+        .image-preview-container {
+          width: 100%;
+          max-height: 400px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          overflow: hidden;
+          margin-bottom: 10px;
+          background-color: #f3f4f6;
+          border-radius: 8px;
+          padding: 10px;
+        }
+
         .image-preview {
-            max-width: 200px;
-            max-height: 200px;
-            margin-top: 10px;
-            border-radius: 4px;
-        }
-
-        .remove-image {
-            display: none;
-        }
-
-        .upload-button {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .upload-button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-        }
-
-        .option-input {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .option-input input {
-            flex: 1;
-        }
-
-        .form-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-            justify-content: flex-end;
-        }
-
-        .form-actions button {
-            padding: 10px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .form-actions button[type="submit"] {
-            background: #4CAF50;
-            color: white;
-        }
-
-        .form-actions button[type="button"] {
-            background: #f44336;
-            color: white;
+          max-width: 100%;
+          max-height: 380px;
+          object-fit: contain;
+          display: block;
+          margin: 0 auto;
         }
 
         .image-crop-container {
-            max-width: 100%;
-            margin: 20px 0;
-            position: relative;
-            background: #f9fafb;
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
+          width: 100%;
+          max-height: 400px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-bottom: 10px;
+          background-color: #f3f4f6;
+          border-radius: 8px;
+          padding: 10px;
+          overflow: hidden;
         }
 
         .image-crop-container img {
-            max-width: 100%;
-            max-height: 400px;
-            display: block;
-            margin: 0 auto;
+          max-width: 100%;
+          max-height: 380px;
+          object-fit: contain;
         }
 
         .crop-controls {
-            margin-top: 20px;
-            display: flex;
-            justify-content: center;
-            gap: 10px;
+          margin-top: 10px;
+          display: flex;
+          justify-content: center;
+          width: 100%;
         }
 
         .crop-button {
@@ -169,18 +133,6 @@
 
         .crop-button:hover {
             background: #45a049;
-        }
-
-        .image-preview-container {
-            margin: 20px 0;
-            text-align: center;
-        }
-
-        .image-preview {
-            max-width: 200px;
-            max-height: 200px;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .upload-button {
