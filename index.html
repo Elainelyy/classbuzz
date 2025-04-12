@@ -611,13 +611,6 @@
       function PollEditor({ poll, onSave, onCancel }) {
         const { useState, useEffect, useRef } = React;
 
-        // Robustly get the ReactCrop component - KEEP THIS CHECK
-        const ActualReactCrop = window.ReactCrop?.default || window.ReactCrop;
-        if (!ActualReactCrop) {
-          console.error('ReactCrop component could not be found. Cropping will not work.');
-          // Optionally return an error indicator component here
-        }
-
         // --- State Variables ---
         const [question, setQuestion] = useState('');
         const [options, setOptions] = useState(['', '']);
@@ -1012,25 +1005,36 @@
                                       <button type="button" onClick={handleNextPage} disabled={currentPage >= totalPages || isRenderingPdf}>Next</button>
                                   </div>
                                )}
-                               {/* Use ActualReactCrop here and check if it exists */}
-                               {ActualReactCrop ? (
-                                 <ActualReactCrop
-                                   crop={crop}
-                                   onChange={(c) => setCrop(c)}
-                                   onComplete={(c) => setCompletedCrop(c)}
-                                   aspect={undefined}
-                                 >
-                                   <img
-                                     ref={imgRef}
-                                     src={image}
-                                     alt="Crop Source"
-                                     style={{ maxHeight: '400px', maxWidth: '100%', display: isRenderingPdf ? 'none' : 'block' }}
-                                     onLoad={onImageLoad}
-                                   />
-                                 </ActualReactCrop>
-                               ) : (
-                                 <p className="error-message">Error: Cropping component failed to load.</p>
-                               )}
+                               {/* Check for ReactCrop just before rendering */}
+                               {(() => {
+                                 // Check for the component right here
+                                 const CropperComponent = window.ReactCrop?.default || window.ReactCrop;
+                                 
+                                 if (!CropperComponent) {
+                                   // Log the error only if we actually needed the component now
+                                   console.error("Error: ReactCrop component not found when needed for rendering.");
+                                   return <p className="error-message">Error: Cropping component failed to load.</p>;
+                                 }
+                                 
+                                 // If found, render it
+                                 return (
+                                   <CropperComponent
+                                     crop={crop}
+                                     onChange={(c) => setCrop(c)}
+                                     onComplete={(c) => setCompletedCrop(c)}
+                                     aspect={undefined} // Allow free aspect ratio, or set e.g., 1 for square
+                                   >
+                                     <img
+                                       ref={imgRef}
+                                       src={image}
+                                       alt="Crop Source"
+                                       style={{ maxHeight: '400px', maxWidth: '100%', display: isRenderingPdf ? 'none' : 'block' }}
+                                       onLoad={onImageLoad}
+                                     />
+                                   </CropperComponent>
+                                 );
+                               })()} 
+                                {/* End of IIFE */}
 
                                {isRenderingPdf && <p>Loading PDF page...</p>}
                                <div className="crop-controls">
