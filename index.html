@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Professor/Student Tools</title>
+    <title>ClassBuzz Polls</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react-image-crop/dist/ReactCrop.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css" />
      <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -223,6 +226,29 @@
 
         .save-button:hover {
             background: #45a049;
+        }
+
+        /* Add styles for PDF navigation if needed */
+        .pdf-navigation {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 10px;
+          gap: 10px;
+        }
+        .pdf-navigation button {
+          padding: 5px 10px;
+          background-color: #f0f0f0;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .pdf-navigation button:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+        .pdf-navigation span {
+          font-weight: bold;
         }
      </style>
 </head>
@@ -577,231 +603,474 @@
         return ( <div className="mt-6 space-y-3"> <h4 className="font-medium text-gray-700">Results ({totalVotes} total votes):</h4> {options.map(option => { const count = results[option] || 0; const percentage = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(1) : 0; return ( <div key={option} className="result-bar-bg"> <span className="result-label">{option}</span> <div className="result-bar" style={{ width: `${percentage}%` }}> <span className="result-percentage">{percentage}%</span>&nbsp;({count}) </div> </div> ); })} </div> );
       }
 
-      function PollEditor({ onSave, onCancel, initialData }) {
-        const [question, setQuestion] = useState(initialData?.question || '');
-        const [options, setOptions] = useState(initialData?.options || ['', '']);
-        const [pollType, setPollType] = useState(initialData?.poll_type || 'single_choice');
-        const [image, setImage] = useState(initialData?.image_url || null);
-        const [imagePreview, setImagePreview] = useState(initialData?.image_url || null);
+      function PollEditor({ poll, onSave, onCancel }) {
+        const { useState, useEffect, useRef } = React;
+        const { ReactCrop } = window; // Ensure ReactCrop is accessible
+
+        // --- State Variables ---
+        const [question, setQuestion] = useState('');
+        const [options, setOptions] = useState(['', '']);
+        const [pollType, setPollType] = useState('single_choice');
+        const [isLoading, setIsLoading] = useState(false);
+        const [error, setError] = useState(null);
+
+        // Image/PDF related state
+        const [image, setImage] = useState(null); // Holds the *source* for cropping (original image or rendered PDF page data URL)
+        const [imagePreview, setImagePreview] = useState(null); // Holds the *final* preview (original image or cropped result)
         const [fileType, setFileType] = useState(null);
         const [isCropping, setIsCropping] = useState(false);
-        const [cropperInstance, setCropperInstance] = useState(null);
-        const imageRef = useRef(null);
-        const fileInputRef = useRef(null);
+        const [crop, setCrop] = useState({ unit: 'px', x: 0, y: 0, width: 100, height: 100 }); // Start with pixel units for canvas
+        const [completedCrop, setCompletedCrop] = useState(null); // Stores the completed crop details
 
-        const handleImageUpload = (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            const objectUrl = URL.createObjectURL(file);
-            setImage(objectUrl);
-            setImagePreview(objectUrl);
+        // PDF specific state
+        const [pdfDoc, setPdfDoc] = useState(null);
+        const [currentPage, setCurrentPage] = useState(1);
+        const [totalPages, setTotalPages] = useState(0);
+        const [isRenderingPdf, setIsRenderingPdf] = useState(false); // To prevent multiple renders
+
+        // Refs
+        const imgRef = useRef(null); // Ref for the image element used in ReactCrop
+        const fileInputRef = useRef(null);
+        const previewCanvasRef = useRef(null); // Canvas for getting cropped data
+
+        // Effect to initialize PDF.js worker
+        useEffect(() => {
+          if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js`;
+          } else {
+            console.error("PDF.js library not loaded.");
+            setError("Failed to load PDF rendering library.");
+          }
+        }, []);
+
+        // Effect to load poll data when editing
+        useEffect(() => {
+          if (poll) {
+            setQuestion(poll.question || '');
+            setOptions(poll.options || ['', '']);
+            setPollType(poll.poll_type || 'single_choice');
+            // If editing, load existing image URL for preview only
+            if (poll.image_url) {
+               setImagePreview(poll.image_url); // Show existing final image
+               setImage(null); // Clear the source image state
+               setFileType(null); // Clear file type
+               setIsCropping(false); // Not cropping initially when editing
+            } else {
+               handleRemoveImage(); // Reset if no image URL
+            }
+          } else {
+             // Reset form when creating a new poll
+             setQuestion('');
+             setOptions(['', '']);
+             setPollType('single_choice');
+             handleRemoveImage(); // Ensure image state is reset
+          }
+        }, [poll]);
+
+        // --- PDF Handling ---
+        const renderPdfPage = async (pdfDocument, pageNum) => {
+          if (!pdfDocument || isRenderingPdf) return;
+          setIsRenderingPdf(true);
+          setError(null); // Clear previous errors
+
+          try {
+            const page = await pdfDocument.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.5 }); // Adjust scale as needed
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const renderContext = {
+              canvasContext: context,
+              viewport: viewport,
+            };
+            await page.render(renderContext).promise;
+
+            const pageDataUrl = canvas.toDataURL('image/png'); // Render as PNG for cropping
+            setImage(pageDataUrl); // Set as the source for cropping
+            setImagePreview(null); // Clear final preview while cropping PDF page
+            setCurrentPage(pageNum);
+            setIsCropping(true); // Enter cropping mode for the rendered page
+            setFileType('image/png'); // Treat the rendered page as an image
+
+            // Reset crop state when page changes
+            setCrop({ unit: 'px', x: 0, y: 0, width: 100, height: 100 });
+            setCompletedCrop(null);
+
+          } catch (pdfError) {
+            console.error('Error rendering PDF page:', pdfError);
+            setError(`Failed to render PDF page ${pageNum}. Please try another file.`);
+            handleRemoveImage(); // Reset on error
+          } finally {
+            setIsRenderingPdf(false);
+          }
+        };
+
+        const handlePrevPage = () => {
+          if (currentPage > 1) {
+            renderPdfPage(pdfDoc, currentPage - 1);
+          }
+        };
+
+        const handleNextPage = () => {
+          if (currentPage < totalPages) {
+            renderPdfPage(pdfDoc, currentPage + 1);
+          }
+        };
+
+        // --- Image/Upload Handling ---
+         const handleImageUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Clean up previous state and object URLs
+            handleRemoveImage();
+
             setFileType(file.type);
 
             if (file.type === 'application/pdf') {
-              setIsCropping(false);
+                if (!window.pdfjsLib) {
+                    setError("PDF library not available.");
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const loadingTask = window.pdfjsLib.getDocument({ data: event.target.result });
+                        const pdf = await loadingTask.promise;
+                        setPdfDoc(pdf);
+                        setTotalPages(pdf.numPages);
+                        renderPdfPage(pdf, 1); // Render the first page immediately
+                    } catch (pdfError) {
+                        console.error('Error loading PDF:', pdfError);
+                        setError('Failed to load PDF. The file might be corrupted or invalid.');
+                        handleRemoveImage();
+                    }
+                };
+                reader.onerror = () => {
+                   setError('Failed to read the PDF file.');
+                   handleRemoveImage();
+                }
+                reader.readAsArrayBuffer(file);
             } else if (file.type.startsWith('image/')) {
-              setIsCropping(true);
+                setPdfDoc(null); // Ensure PDF state is cleared
+                setTotalPages(0);
+                setCurrentPage(1);
+                const objectUrl = URL.createObjectURL(file);
+                setImage(objectUrl); // Set source for cropping
+                setImagePreview(null); // Clear final preview
+                setIsCropping(true); // Enter cropping mode
+                // Reset crop state
+                setCrop({ unit: '%', width: 50, aspect: 1 }); // Use % for images initially
+                setCompletedCrop(null);
             } else {
-              alert('Please upload an image or PDF file');
-              URL.revokeObjectURL(objectUrl);
-              setImage(null);
-              setImagePreview(null);
-              setFileType(null);
-              setIsCropping(false);
+                alert('Please upload an image (JPEG, PNG, GIF) or PDF file');
+                handleRemoveImage();
             }
-          }
-        };
-
-        // Initialize Cropper when image is loaded
-        useEffect(() => {
-          if (isCropping && image && imageRef.current) {
-            if (cropperInstance) {
-              cropperInstance.destroy();
-            }
-            
-            const cropper = new Cropper(imageRef.current, {
-              viewMode: 1,
-              dragMode: 'crop',
-              autoCrop: false,
-              zoomable: true,
-              scalable: false,
-              movable: true,
-              background: false,
-              checkOrientation: false,
-              ready() {
-                console.log("Cropper is ready");
-              }
-            });
-            
-            setCropperInstance(cropper);
-          }
-        }, [isCropping, image]);
-
-        const handleCropComplete = () => {
-          if (cropperInstance) {
-            const croppedCanvas = cropperInstance.getCroppedCanvas({
-              imageSmoothingEnabled: true,
-              imageSmoothingQuality: 'high',
-            });
-
-            if (croppedCanvas) {
-              const croppedImageUrl = croppedCanvas.toDataURL('image/jpeg');
-              setImagePreview(croppedImageUrl);
-              setIsCropping(false);
-              if (cropperInstance) {
-                cropperInstance.destroy();
-                setCropperInstance(null);
-              }
-            }
-          }
-        };
-
-        const handleSubmit = (e) => {
-          e.preventDefault();
-          
-          // Validate that either question or image is provided
-          if (!question.trim() && !image) {
-            alert('Please provide either a question or an image');
-            return;
-          }
-
-          if (pollType === 'open_ended') {
-            onSave({
-              question: question.trim(),
-              options: null,
-              pollType,
-              imageUrl: imagePreview
-            });
-            return;
-          }
-
-          // Validate options
-          const validOptions = options.filter(opt => opt.trim() !== '');
-          if (validOptions.length < 2) {
-            alert('Please provide at least two options');
-            return;
-          }
-
-          onSave({
-            question: question.trim(),
-            options: validOptions,
-            pollType,
-            imageUrl: imagePreview
-          });
         };
 
         const handleRemoveImage = () => {
-          // Clean up the object URL first
-          if (imagePreview && imagePreview.startsWith('blob:')) {
+          // Revoke existing object URLs if they exist
+          if (image && image.startsWith('blob:')) {
+            URL.revokeObjectURL(image);
+          }
+           if (imagePreview && imagePreview.startsWith('blob:')) {
             URL.revokeObjectURL(imagePreview);
           }
+
           setImage(null);
           setImagePreview(null);
-          setFileType(null); // Reset file type state
+          setFileType(null);
           setIsCropping(false);
-          // No need to interact with cropperInstance here if we manage state correctly
+          setPdfDoc(null);
+          setCurrentPage(1);
+          setTotalPages(0);
+          setCrop({ unit: '%', width: 50, aspect: 1 });
+          setCompletedCrop(null);
+           // Clear the file input
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
         };
 
+
+        // --- Cropping Handling ---
+        const onImageLoad = (e) => {
+          // You can potentially adjust the initial crop here based on image dimensions
+          // For example: const { naturalWidth: width, naturalHeight: height } = e.currentTarget;
+          // console.log("Image loaded for cropping:", e.currentTarget.src.substring(0, 100));
+        };
+
+        // Function to get the cropped image data URL
+        const getCroppedImg = (sourceImage, cropData, canvasRef) => {
+          const canvas = canvasRef.current;
+          const imageElement = sourceImage; // This should be the actual image element used by ReactCrop
+
+          if (!imageElement || !canvas || !cropData || !cropData.width || !cropData.height) {
+              console.error("Missing data for cropping", {imageElement, canvas, cropData});
+              return null;
+          }
+
+          const scaleX = imageElement.naturalWidth / imageElement.width;
+          const scaleY = imageElement.naturalHeight / imageElement.height;
+          const pixelRatio = window.devicePixelRatio || 1;
+
+          canvas.width = Math.floor(cropData.width * scaleX * pixelRatio);
+          canvas.height = Math.floor(cropData.height * scaleY * pixelRatio);
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+              console.error("Could not get canvas context");
+              return null;
+          }
+
+          ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+          ctx.imageSmoothingQuality = 'high';
+
+          ctx.drawImage(
+              imageElement,
+              cropData.x * scaleX,
+              cropData.y * scaleY,
+              cropData.width * scaleX,
+              cropData.height * scaleY,
+              0,
+              0,
+              cropData.width * scaleX,
+              cropData.height * scaleY
+          );
+
+          // Reset transform before getting data URL
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+          try {
+              return canvas.toDataURL('image/jpeg'); // Or image/png
+          } catch (e) {
+              console.error("Error creating data URL from canvas", e);
+              return null;
+          }
+        };
+
+
+        const handleCropComplete = () => {
+           if (!completedCrop || !imgRef.current) {
+                console.error("Crop details or image ref not available.");
+                setError("Could not apply crop. Please try again.");
+                return;
+            }
+
+            const croppedImageDataUrl = getCroppedImg(imgRef.current, completedCrop, previewCanvasRef);
+
+            if (croppedImageDataUrl) {
+                setImagePreview(croppedImageDataUrl); // Set the final preview to the cropped image
+                setImage(null); // Clear the source image/PDF page
+                setIsCropping(false); // Exit cropping mode
+                setPdfDoc(null); // Clear PDF doc state
+                setTotalPages(0);
+                setCurrentPage(1);
+                 // Optionally clear the file input
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            } else {
+                setError("Failed to generate cropped image. Please try again.");
+                 // Optionally reset to previous state or allow retry
+            }
+        };
+
+
+        // --- Form Handling ---
+        const handleAddOption = () => {
+          setOptions([...options, '']);
+        };
+
+        const handleRemoveOption = (index) => {
+          if (options.length > 2) {
+            setOptions(options.filter((_, i) => i !== index));
+          }
+        };
+
+        const handleOptionChange = (index, value) => {
+          const newOptions = [...options];
+          newOptions[index] = value;
+          setOptions(newOptions);
+        };
+
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+          setIsLoading(true);
+          setError(null);
+
+          // Basic validation
+          if (!question.trim() && !imagePreview) {
+             setError('Please provide a question or upload an image/PDF.');
+             setIsLoading(false);
+             return;
+          }
+          if (pollType !== 'open_ended') {
+            const validOptions = options.filter(opt => opt.trim() !== '');
+            if (validOptions.length < 2) {
+              setError('Multiple choice/Single choice polls require at least two non-empty options.');
+              setIsLoading(false);
+              return;
+            }
+            if (new Set(validOptions).size !== validOptions.length) {
+              setError('Duplicate options are not allowed.');
+              setIsLoading(false);
+              return;
+            }
+          }
+
+          const pollData = {
+            id: poll ? poll.id : null,
+            question: question.trim(),
+            options: pollType === 'open_ended' ? [] : options.map(opt => opt.trim()).filter(opt => opt !== ''),
+            pollType: pollType,
+            // Include image data only if a *new* cropped image exists
+            // If imagePreview holds an existing URL (from editing), don't resend image data unless a new one was uploaded/cropped
+            imageDataUrl: (imagePreview && imagePreview.startsWith('data:image')) ? imagePreview : null,
+            // Keep existing image URL if no new image was provided
+            existingImageUrl: (!imagePreview && poll && poll.image_url) ? poll.image_url : (imagePreview && !imagePreview.startsWith('data:image')) ? imagePreview : null
+          };
+
+
+          try {
+            await onSave(pollData);
+             // Reset form after successful save only if creating new
+             if (!poll) {
+                setQuestion('');
+                setOptions(['', '']);
+                setPollType('single_choice');
+                handleRemoveImage();
+             }
+          } catch (saveError) {
+            setError(saveError.message || 'Failed to save poll');
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+
+        // --- Render ---
         return (
           <div className="poll-editor">
-            <h2>{initialData ? 'Edit Poll' : 'Create New Poll'}</h2>
+            <h2>{poll ? 'Edit Poll' : 'Create New Poll'}</h2>
+            {error && <p className="error-message">{error}</p>}
             <form onSubmit={handleSubmit}>
+              {/* Question Input */}
               <div className="form-group">
-                <label>Question (optional if image is provided):</label>
+                <label>Question:</label>
                 <input
                   type="text"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="Enter your poll question (optional if image/PDF provided)"
                 />
               </div>
 
+              {/* Image/PDF Upload and Crop Area */}
               <div className="form-group">
-                <label>Image or PDF (optional if question is provided):</label>
-                <div 
-                  className="image-upload-container"
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.add('drag-over');
-                  }}
-                  onDragLeave={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove('drag-over');
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove('drag-over');
-                    const file = e.dataTransfer.files[0];
-                    if (file) {
-                      handleImageUpload({ target: { files: [file] } });
-                    }
-                  }}
-                >
-                  {imagePreview && !isCropping ? (
-                    <div className="image-preview-container">
-                      {fileType === 'application/pdf' ? (
-                        <iframe 
-                          src={imagePreview} 
-                          className="image-preview"
-                          style={{ width: '100%', height: '400px' }}
-                          title="PDF Preview"
-                        />
+                  <label>Image or PDF (optional if question provided):</label>
+                  <div
+                      className={`image-upload-container ${isCropping ? 'cropping' : ''}`}
+                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
+                      onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); }}
+                      onDrop={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.remove('drag-over');
+                          const file = e.dataTransfer.files[0];
+                          if (file) {
+                              // Simulate event object for handleImageUpload
+                              handleImageUpload({ target: { files: [file] } });
+                          }
+                      }}
+                  >
+                      {/* Display Area: Shows final preview, cropper, or upload prompt */}
+                      {!isCropping && imagePreview ? (
+                          // 1. Final Preview (after cropping or if editing existing)
+                          <div className="image-preview-container">
+                              <img src={imagePreview} alt="Preview" className="image-preview" />
+                          </div>
+                      ) : isCropping && image ? (
+                          // 2. Cropping Interface (Image or Rendered PDF Page)
+                          <div className="image-crop-container">
+                               {pdfDoc && totalPages > 0 && (
+                                   <div className="pdf-navigation">
+                                      <button type="button" onClick={handlePrevPage} disabled={currentPage <= 1 || isRenderingPdf}>Previous</button>
+                                      <span>Page {currentPage} of {totalPages}</span>
+                                      <button type="button" onClick={handleNextPage} disabled={currentPage >= totalPages || isRenderingPdf}>Next</button>
+                                  </div>
+                               )}
+                               <ReactCrop
+                                   crop={crop}
+                                   onChange={(c) => setCrop(c)}
+                                   onComplete={(c) => setCompletedCrop(c)}
+                                   aspect={undefined} // Allow free aspect ratio, or set e.g., 1 for square
+                               >
+                                   <img
+                                       ref={imgRef}
+                                       src={image} // Source is the rendered PDF page or original image
+                                       alt="Crop Source"
+                                       style={{ maxHeight: '400px', maxWidth: '100%', display: isRenderingPdf ? 'none' : 'block' }} // Hide while rendering PDF page
+                                       onLoad={onImageLoad}
+                                   />
+                               </ReactCrop>
+                               {isRenderingPdf && <p>Loading PDF page...</p>}
+                               <div className="crop-controls">
+                                   <button
+                                       type="button"
+                                       onClick={handleCropComplete}
+                                       className="crop-button"
+                                       disabled={!completedCrop || !completedCrop.width || !completedCrop.height || isRenderingPdf}
+                                   >
+                                       Apply Crop
+                                   </button>
+                                    <button type="button" onClick={handleRemoveImage} className="cancel-crop-button">Cancel</button>
+                               </div>
+                          </div>
                       ) : (
-                        <img src={imagePreview} alt="Preview" className="image-preview" />
+                          // 3. Upload Prompt
+                          <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
+                              <div className="upload-icon">📁</div>
+                              <p>Drag and drop an image or PDF here</p>
+                              <p>or</p>
+                              <button type="button" className="upload-button">
+                                  Browse Files
+                              </button>
+                          </div>
                       )}
-                    </div>
-                  ) : isCropping && image ? (
-                    <div className="image-crop-container">
-                      <img 
-                        ref={imageRef} 
-                        src={image} 
-                        alt="Crop" 
-                        style={{ maxWidth: '100%', maxHeight: '400px' }}
-                      />
-                      <div className="crop-controls">
-                        <button
-                          type="button"
-                          onClick={handleCropComplete}
-                          className="crop-button"
-                        >
-                          Done Cropping
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
-                      <div className="upload-icon">📁</div>
-                      <p>Drag and drop an image or PDF here</p>
-                      <p>or</p>
-                      <button
-                        type="button"
-                        className="upload-button"
-                      >
-                        Browse Files
-                      </button>
-                    </div>
-                  )}
 
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*,.pdf"
-                    onChange={handleImageUpload}
-                    style={{ display: 'none' }}
-                  />
-                  {imagePreview && (
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="remove-image"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
+                       {/* Hidden canvas for generating cropped image data */}
+                       <canvas ref={previewCanvasRef} style={{ display: 'none' }} />
+
+
+                      {/* Hidden File Input */}
+                      <input
+                          type="file"
+                          ref={fileInputRef}
+                          accept="image/jpeg,image/png,image/gif,application/pdf"
+                          onChange={handleImageUpload}
+                          style={{ display: 'none' }}
+                      />
+
+                      {/* Remove Button (shows if there's a preview or source image) */}
+                      {(imagePreview || image) && !isCropping && (
+                           <button
+                                type="button"
+                                onClick={handleRemoveImage}
+                                className="remove-image"
+                                style={{ marginTop: '10px' }} // Adjust spacing as needed
+                            >
+                                Remove Image
+                            </button>
+                      )}
+                  </div>
               </div>
 
+
+              {/* Poll Type Selection */}
               <div className="form-group">
-                <label>Poll Type</label>
+                <label>Poll Type:</label>
                 <select value={pollType} onChange={(e) => setPollType(e.target.value)}>
                   <option value="single_choice">Single Choice</option>
                   <option value="multiple_choice">Multiple Choice</option>
@@ -809,52 +1078,39 @@
                 </select>
               </div>
 
+              {/* Options (Conditional) */}
               {pollType !== 'open_ended' && (
                 <div className="form-group">
-                  <label>Options</label>
+                  <label>Options:</label>
                   {options.map((option, index) => (
                     <div key={index} className="option-input">
                       <input
                         type="text"
                         value={option}
-                        onChange={(e) => {
-                          const newOptions = [...options];
-                          newOptions[index] = e.target.value;
-                          setOptions(newOptions);
-                        }}
+                        onChange={(e) => handleOptionChange(index, e.target.value)}
                         placeholder={`Option ${index + 1}`}
                         required
                       />
                       {options.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newOptions = options.filter((_, i) => i !== index);
-                            setOptions(newOptions);
-                          }}
-                          className="remove-option"
-                        >
-                          ×
+                        <button type="button" onClick={() => handleRemoveOption(index)} className="remove-option">
+                          Remove
                         </button>
                       )}
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => setOptions([...options, ''])}
-                    className="add-option"
-                  >
+                  <button type="button" onClick={handleAddOption} className="add-option">
                     Add Option
                   </button>
                 </div>
               )}
 
+              {/* Form Actions */}
               <div className="form-actions">
-                <button type="button" onClick={onCancel} className="cancel-button">
+                <button type="button" onClick={onCancel} className="cancel-button" disabled={isLoading}>
                   Cancel
                 </button>
-                <button type="submit" className="save-button">
-                  {initialData ? 'Update Poll' : 'Create Poll'}
+                <button type="submit" className="save-button" disabled={isLoading}>
+                  {isLoading ? 'Saving...' : (poll ? 'Update Poll' : 'Create Poll')}
                 </button>
               </div>
             </form>
@@ -1243,7 +1499,7 @@
                                   // Show Editor when creating or editing
                                     <PollEditor 
                                         key={editingPollId} 
-                                        initialData={editingPollId === 'new' ? null : polls.find(p => p.id === editingPollId)} 
+                                        poll={editingPollId === 'new' ? null : polls.find(p => p.id === editingPollId)} 
                                         onSave={handleSavePoll} 
                                         onCancel={() => setEditingPollId(null)} 
                                     />
