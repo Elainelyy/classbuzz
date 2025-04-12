@@ -8,9 +8,9 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Fix for ReactCrop - use a specific version and correct file path -->
-    <script src="https://unpkg.com/react-image-crop@8.6.6/dist/ReactCrop.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/react-image-crop@8.6.6/dist/ReactCrop.css" />
+    <!-- Use an explicitly working version of ReactCrop -->
+    <script src="https://unpkg.com/react-image-crop@6.0.0/dist/ReactCrop.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/react-image-crop@6.0.0/dist/ReactCrop.css" />
     <!-- Fix for PDF.js - use more reliable CDN link -->
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/build/pdf.min.js"></script>
      <style>
@@ -256,6 +256,18 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="text/babel">
+      // Create a React component wrapper for the global ReactCrop
+      const ReactCropWrapper = (props) => {
+        const reactCrop = window.ReactCrop;
+        if (!reactCrop) {
+          console.error("ReactCrop not found on window object");
+          return <div className="error-message">Error loading crop component</div>;
+        }
+        
+        // Using React.createElement directly with the global component
+        return React.createElement(reactCrop, props);
+      }
+      
       const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
       // Base URL for API - relative to current domain
@@ -986,20 +998,15 @@
                                )}
                                {/* Check for ReactCrop just before rendering */}
                                {(() => {
-                                 // For version 8.6.6, ReactCrop is directly available as a global
-                                 if (!window.ReactCrop) {
-                                   console.error("Error: ReactCrop component not found when needed for rendering.");
-                                   return <p className="error-message">Error: Cropping component failed to load.</p>;
-                                 }
-                                 
-                                 // If found, render it - v8.6.6 usage is different from v9
+                                 // We're using our custom ReactCropWrapper that checks internally
                                  return (
-                                   <ReactCrop
+                                   <ReactCropWrapper
                                      src={image}
                                      crop={crop}
                                      onChange={newCrop => setCrop(newCrop)}
                                      onComplete={completedCrop => setCompletedCrop(completedCrop)}
                                      onImageLoaded={onImageLoad}
+                                     keepSelection={true}
                                    />
                                  );
                                })()}
