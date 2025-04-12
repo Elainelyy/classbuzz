@@ -259,19 +259,6 @@
       // Base URL for API - relative to current domain
       const API_BASE_URL = window.location.origin;
 
-      // Initialize ReactCrop
-      // const ReactCrop = window.ReactCrop?.default || window.ReactCrop; // REMOVE this line
-      // if (!ReactCrop) { // REMOVE this line
-      //   console.error('ReactCrop is not loaded. Please check if the script is properly loaded.'); // REMOVE this line
-      // } // REMOVE this line
-
-      // Robustly get the ReactCrop component
-      const ActualReactCrop = window.ReactCrop?.default || window.ReactCrop;
-      if (!ActualReactCrop) {
-        console.error('ReactCrop component could not be found. Cropping will not work.');
-        // You could set an error state here if needed
-      }
-
       // --- Utility Functions ---
       function classNames(...classes) { return classes.filter(Boolean).join(' '); }
 
