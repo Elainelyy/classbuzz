@@ -10,8 +10,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/react-image-crop/dist/ReactCrop.umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css" />
      <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
@@ -262,9 +260,16 @@
       const API_BASE_URL = window.location.origin;
 
       // Initialize ReactCrop
-      const ReactCrop = window.ReactCrop?.default || window.ReactCrop;
-      if (!ReactCrop) {
-        console.error('ReactCrop is not loaded. Please check if the script is properly loaded.');
+      // const ReactCrop = window.ReactCrop?.default || window.ReactCrop; // REMOVE this line
+      // if (!ReactCrop) { // REMOVE this line
+      //   console.error('ReactCrop is not loaded. Please check if the script is properly loaded.'); // REMOVE this line
+      // } // REMOVE this line
+
+      // Robustly get the ReactCrop component
+      const ActualReactCrop = window.ReactCrop?.default || window.ReactCrop;
+      if (!ActualReactCrop) {
+        console.error('ReactCrop component could not be found. Cropping will not work.');
+        // You could set an error state here if needed
       }
 
       // --- Utility Functions ---
@@ -605,7 +610,13 @@
 
       function PollEditor({ poll, onSave, onCancel }) {
         const { useState, useEffect, useRef } = React;
-        const { ReactCrop } = window; // Ensure ReactCrop is accessible
+
+        // Robustly get the ReactCrop component - KEEP THIS CHECK
+        const ActualReactCrop = window.ReactCrop?.default || window.ReactCrop;
+        if (!ActualReactCrop) {
+          console.error('ReactCrop component could not be found. Cropping will not work.');
+          // Optionally return an error indicator component here
+        }
 
         // --- State Variables ---
         const [question, setQuestion] = useState('');
@@ -1001,20 +1012,26 @@
                                       <button type="button" onClick={handleNextPage} disabled={currentPage >= totalPages || isRenderingPdf}>Next</button>
                                   </div>
                                )}
-                               <ReactCrop
+                               {/* Use ActualReactCrop here and check if it exists */}
+                               {ActualReactCrop ? (
+                                 <ActualReactCrop
                                    crop={crop}
                                    onChange={(c) => setCrop(c)}
                                    onComplete={(c) => setCompletedCrop(c)}
-                                   aspect={undefined} // Allow free aspect ratio, or set e.g., 1 for square
-                               >
+                                   aspect={undefined}
+                                 >
                                    <img
-                                       ref={imgRef}
-                                       src={image} // Source is the rendered PDF page or original image
-                                       alt="Crop Source"
-                                       style={{ maxHeight: '400px', maxWidth: '100%', display: isRenderingPdf ? 'none' : 'block' }} // Hide while rendering PDF page
-                                       onLoad={onImageLoad}
+                                     ref={imgRef}
+                                     src={image}
+                                     alt="Crop Source"
+                                     style={{ maxHeight: '400px', maxWidth: '100%', display: isRenderingPdf ? 'none' : 'block' }}
+                                     onLoad={onImageLoad}
                                    />
-                               </ReactCrop>
+                                 </ActualReactCrop>
+                               ) : (
+                                 <p className="error-message">Error: Cropping component failed to load.</p>
+                               )}
+
                                {isRenderingPdf && <p>Loading PDF page...</p>}
                                <div className="crop-controls">
                                    <button
@@ -1216,18 +1233,19 @@
           const handleSavePoll = async (pollData) => {
             try {
               setIsLoading(true);
-              
+              setError(null); // Clear previous errors
+
               const isEditing = !!pollData.id;
-              
+
               let url = `${API_BASE_URL}/api/polls`;
               let method = 'POST';
-              
+
               if (isEditing) {
                 url = `${API_BASE_URL}/api/polls/${pollData.id}`;
                 method = 'PATCH';
               }
 
-              // Validate options array
+              // Validate options array (Keep this validation)
               if (pollData.pollType !== 'open_ended') {
                 if (!pollData.options || !Array.isArray(pollData.options)) {
                   throw new Error('Options must be an array for non-open-ended polls');
@@ -1240,47 +1258,46 @@
                   throw new Error('Duplicate options are not allowed');
                   }
               } else {
-                // For open-ended polls, ensure options is null
-                pollData.options = null;
+                // For open-ended polls, ensure options is null or empty array based on backend expectation
+                 pollData.options = pollData.options || []; // Ensure it's at least an empty array if null
               }
-              
+
               console.log(`${isEditing ? 'Updating' : 'Creating'} poll with data:`, {
                 question: pollData.question,
                 options: pollData.options,
                 poll_type: pollData.pollType,
-                image_url: pollData.imageUrl
+                imageDataUrl: pollData.imageDataUrl ? '[Base64 Data Present]' : null, // Log presence, not the data
+                existingImageUrl: pollData.existingImageUrl
               });
-              
+
               const response = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
+                // Send the correct image data fields to the backend
                 body: JSON.stringify({
                   question: pollData.question,
                   options: pollData.options,
                   poll_type: pollData.pollType,
-                  image_url: pollData.imageUrl
+                  imageDataUrl: pollData.imageDataUrl, // Send new base64 data if available
+                  existingImageUrl: pollData.existingImageUrl // Send existing URL if no new image/cleared
                 })
               });
-              
+
               if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({})); // Try to parse error JSON
                 console.error('Server error response:', errorData);
-                throw new Error(errorData.error || 'Failed to save poll');
+                throw new Error(errorData.error || `Failed to save poll (Status: ${response.status})`);
               }
-              
-              if (isEditing) {
-                // Update the poll in the existing list
-                const updatedPoll = await response.json();
-                setPolls(polls.map(p => p.id === updatedPoll.id ? updatedPoll : p));
-              } else {
-                // Add the new poll to the list
-                fetchPolls();
-              }
-              
-              setEditingPollId(null);
+
+              // Success: Refetch polls to update the list
+              await fetchPolls(); // Use await if fetchPolls is async
+              setEditingPollId(null); // Close the editor
+
             } catch (e) {
               console.error('Error saving poll:', e);
-              setError(e.message);
+              // Set error state to display the error message in the UI
+              setError(e.message || 'An unexpected error occurred while saving.');
+              // Keep the editor open so the user doesn't lose their input
             } finally {
               setIsLoading(false);
             }
