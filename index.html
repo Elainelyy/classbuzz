@@ -879,25 +879,6 @@
           }
         };
 
-        // Add a new function to use the original image without cropping
-        const handleUseOriginalImage = () => {
-          if (!image) {
-            setError("No image available.");
-            return;
-          }
-          
-          // Set the original image as the preview
-          setImagePreview(image);
-          setIsCropping(false);
-          setCompletedCrop(true);
-          
-          // Cleanup cropper
-          if (cropperInstanceRef.current) {
-            cropperInstanceRef.current.destroy();
-            cropperInstanceRef.current = null;
-          }
-        };
-
         const handleRemoveImage = () => {
           // Revoke existing object URLs if they exist
           if (image && image.startsWith('blob:')) {
