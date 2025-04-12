@@ -8,15 +8,45 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Use an explicitly working version of ReactCrop -->
-    <script src="https://unpkg.com/react-image-crop@6.0.0/dist/ReactCrop.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/react-image-crop@6.0.0/dist/ReactCrop.css" />
-    <!-- Fix for PDF.js - use more reliable CDN link -->
+    
+    <!-- Use CropperJS instead of ReactCrop -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+    
+    <!-- PDF.js for PDF rendering -->
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/build/pdf.min.js"></script>
-     <style>
+    <script>
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/build/pdf.worker.min.js';
+      }
+    </script>
+    
+    <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         .dot { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        /* CropperJS specific styles */
+        .cropper-container {
+          max-height: 400px !important;
+        }
+        .cropper-view-box,
+        .cropper-face {
+          border-radius: 0.375rem;
+        }
+        .cropper-drag-box {
+          background-color: rgba(255, 255, 255, 0.3);
+        }
+        #cropperImage {
+          display: none;
+          max-width: 100%;
+          opacity: 0;
+          transition: opacity 0.3s ease-in-out;
+        }
+        #cropperImage.loaded {
+          opacity: 1;
+        }
+        
         /* Basic loading/error message styling */
         .message-box {
             text-align: center;
@@ -256,17 +286,51 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="text/babel">
-      // Create a React component wrapper for the global ReactCrop
+      // Wait for ReactCrop to load via ESM
       const ReactCropWrapper = (props) => {
-        const reactCrop = window.ReactCrop;
-        if (!reactCrop) {
-          console.error("ReactCrop not found on window object");
-          return <div className="error-message">Error loading crop component</div>;
+        const [cropComponent, setCropComponent] = React.useState(null);
+        const [loading, setLoading] = React.useState(true);
+        
+        React.useEffect(() => {
+          // Check if ReactCrop is available via our ESM import
+          const checkForReactCrop = () => {
+            if (window.ReactCropESM) {
+              setCropComponent(window.ReactCropESM);
+              setLoading(false);
+              return true;
+            }
+            return false;
+          };
+          
+          // First check immediately
+          if (!checkForReactCrop()) {
+            // Then check again after a delay
+            const intervalId = setInterval(checkForReactCrop, 100);
+            
+            // Set a timeout to stop checking after 3 seconds
+            setTimeout(() => {
+              clearInterval(intervalId);
+              if (!cropComponent) {
+                console.error("Could not load ReactCrop after waiting");
+                setLoading(false);
+              }
+            }, 3000);
+            
+            // Clean up
+            return () => clearInterval(intervalId);
+          }
+        }, []);
+        
+        if (loading) {
+          return <div className="text-center p-4">Loading crop component...</div>;
         }
         
-        // Using React.createElement directly with the global component
-        return React.createElement(reactCrop, props);
-      }
+        if (!cropComponent) {
+          return <div className="error-message">Could not load image cropping component</div>;
+        }
+        
+        return React.createElement(cropComponent, props);
+      };
       
       const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
@@ -615,32 +679,40 @@
         const [error, setError] = useState(null);
 
         // Image/PDF related state
-        const [image, setImage] = useState(null); // Holds the *source* for cropping (original image or rendered PDF page data URL)
-        const [imagePreview, setImagePreview] = useState(null); // Holds the *final* preview (original image or cropped result)
+        const [image, setImage] = useState(null); // Will store the image data URL
+        const [imagePreview, setImagePreview] = useState(null); // For displaying the final cropped result
         const [fileType, setFileType] = useState(null);
         const [isCropping, setIsCropping] = useState(false);
-        const [crop, setCrop] = useState({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 }); // Initialize with default crop
-        const [completedCrop, setCompletedCrop] = useState(null); // Stores the completed crop details
-
+        const [completedCrop, setCompletedCrop] = useState(null); // Will store the cropped data URL
+        
+        // Refs for CropperJS
+        const cropperImageRef = useRef(null);
+        const cropperInstanceRef = useRef(null);
+        
         // PDF specific state
         const [pdfDoc, setPdfDoc] = useState(null);
         const [currentPage, setCurrentPage] = useState(1);
         const [totalPages, setTotalPages] = useState(0);
-        const [isRenderingPdf, setIsRenderingPdf] = useState(false); // To prevent multiple renders
-
-        // Refs
-        const imgRef = useRef(null); // Ref for the image element used in ReactCrop
-        const fileInputRef = useRef(null);
-        const previewCanvasRef = useRef(null); // Canvas for getting cropped data
-
+        const [isRenderingPdf, setIsRenderingPdf] = useState(false);
+        
         // Effect to initialize PDF.js worker
         useEffect(() => {
           if (window.pdfjsLib) {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js`;
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/build/pdf.worker.min.js`;
           } else {
             console.error("PDF.js library not loaded.");
             setError("Failed to load PDF rendering library.");
           }
+        }, []);
+        
+        // Cleanup cropper instance on unmount
+        useEffect(() => {
+          return () => {
+            if (cropperInstanceRef.current) {
+              cropperInstanceRef.current.destroy();
+              cropperInstanceRef.current = null;
+            }
+          };
         }, []);
 
         // Effect to load poll data when editing
@@ -649,25 +721,71 @@
             setQuestion(poll.question || '');
             setOptions(poll.options || ['', '']);
             setPollType(poll.poll_type || 'single_choice');
+            
             // If editing, load existing image URL for preview only
             if (poll.image_url) {
-               setImagePreview(poll.image_url); // Show existing final image
-               setImage(null); // Clear the source image state
-               setFileType(null); // Clear file type
-               setIsCropping(false); // Not cropping initially when editing
+              setImagePreview(poll.image_url); // Show existing final image
+              setImage(null); // Clear the source image state
+              setFileType(null); // Clear file type
+              setIsCropping(false); // Not cropping initially when editing
             } else {
-               handleRemoveImage(); // Reset if no image URL
+              handleRemoveImage(); // Reset if no image URL
             }
           } else {
-             // Reset form when creating a new poll
-             setQuestion('');
-             setOptions(['', '']);
-             setPollType('single_choice');
-             handleRemoveImage(); // Ensure image state is reset
+            // Reset form when creating a new poll
+            setQuestion('');
+            setOptions(['', '']);
+            setPollType('single_choice');
+            handleRemoveImage(); // Ensure image state is reset
           }
         }, [poll]);
 
-        // --- PDF Handling ---
+        // Function to initialize CropperJS
+        const initializeCropper = () => {
+          // Destroy previous instance if it exists
+          if (cropperInstanceRef.current) {
+            cropperInstanceRef.current.destroy();
+            cropperInstanceRef.current = null;
+          }
+          
+          // Make sure the image element is available
+          if (!cropperImageRef.current) return;
+          
+          // Give time for the image to load
+          setTimeout(() => {
+            try {
+              cropperInstanceRef.current = new Cropper(cropperImageRef.current, {
+                viewMode: 1,
+                dragMode: 'crop',
+                autoCrop: false,
+                zoomable: true,
+                scalable: false,
+                movable: true,
+                background: false,
+                ready() {
+                  console.log("Cropper is ready");
+                  if (cropperImageRef.current) {
+                    cropperImageRef.current.classList.add('loaded');
+                  }
+                },
+                crop(event) {
+                  // Enable apply crop button when a valid crop area is selected
+                  const data = event.detail;
+                  if (data.width > 0 && data.height > 0) {
+                    setCompletedCrop(true);
+                  } else {
+                    setCompletedCrop(null);
+                  }
+                }
+              });
+            } catch (err) {
+              console.error("Error initializing cropper:", err);
+              setError("Could not initialize image cropper. Please try again.");
+            }
+          }, 100);
+        };
+
+        // PDF Page Rendering
         const renderPdfPage = async (pdfDocument, pageNum) => {
           if (!pdfDocument || isRenderingPdf) return;
           setIsRenderingPdf(true);
@@ -675,7 +793,7 @@
 
           try {
             const page = await pdfDocument.getPage(pageNum);
-            const viewport = page.getViewport({ scale: 1.5 }); // Adjust scale as needed
+            const viewport = page.getViewport({ scale: 1.5 });
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             canvas.height = viewport.height;
@@ -687,21 +805,29 @@
             };
             await page.render(renderContext).promise;
 
-            const pageDataUrl = canvas.toDataURL('image/png'); // Render as PNG for cropping
-            setImage(pageDataUrl); // Set as the source for cropping
-            setImagePreview(null); // Clear final preview while cropping PDF page
+            const pageDataUrl = canvas.toDataURL('image/png');
+            setImage(pageDataUrl);
+            setImagePreview(null);
             setCurrentPage(pageNum);
-            setIsCropping(true); // Enter cropping mode for the rendered page
-            setFileType('image/png'); // Treat the rendered page as an image
-
+            setIsCropping(true);
+            setFileType('image/png');
+            
             // Reset crop state when page changes
-            setCrop({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 });
             setCompletedCrop(null);
+            
+            // Initialize cropper on next render
+            setTimeout(() => {
+              if (cropperImageRef.current) {
+                cropperImageRef.current.src = pageDataUrl;
+                cropperImageRef.current.style.display = 'block';
+                initializeCropper();
+              }
+            }, 100);
 
           } catch (pdfError) {
             console.error('Error rendering PDF page:', pdfError);
             setError(`Failed to render PDF page ${pageNum}. Please try another file.`);
-            handleRemoveImage(); // Reset on error
+            handleRemoveImage();
           } finally {
             setIsRenderingPdf(false);
           }
@@ -719,55 +845,73 @@
           }
         };
 
-        // --- Image/Upload Handling ---
-         const handleImageUpload = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        // Image/Upload Handling
+        const handleImageUpload = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
 
-            // Clean up previous state and object URLs
-            handleRemoveImage();
+          // Clean up previous state
+          handleRemoveImage();
+          setFileType(file.type);
 
-            setFileType(file.type);
-
-            if (file.type === 'application/pdf') {
-                if (!window.pdfjsLib) {
-                    setError("PDF library not available.");
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const loadingTask = window.pdfjsLib.getDocument({ data: event.target.result });
-                        const pdf = await loadingTask.promise;
-                        setPdfDoc(pdf);
-                        setTotalPages(pdf.numPages);
-                        renderPdfPage(pdf, 1); // Render the first page immediately
-                    } catch (pdfError) {
-                        console.error('Error loading PDF:', pdfError);
-                        setError('Failed to load PDF. The file might be corrupted or invalid.');
-                        handleRemoveImage();
-                    }
-                };
-                reader.onerror = () => {
-                   setError('Failed to read the PDF file.');
-                   handleRemoveImage();
-                }
-                reader.readAsArrayBuffer(file);
-            } else if (file.type.startsWith('image/')) {
-                setPdfDoc(null); // Ensure PDF state is cleared
-                setTotalPages(0);
-                setCurrentPage(1);
-                const objectUrl = URL.createObjectURL(file);
-                setImage(objectUrl); // Set source for cropping
-                setImagePreview(null); // Clear final preview
-                setIsCropping(true); // Enter cropping mode
-                // Reset crop state for ReactCrop v8.6.6
-                setCrop({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 });
-                setCompletedCrop(null);
-            } else {
-                alert('Please upload an image (JPEG, PNG, GIF) or PDF file');
-                handleRemoveImage();
+          if (file.type === 'application/pdf') {
+            if (!window.pdfjsLib) {
+              setError("PDF library not available.");
+              return;
             }
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              try {
+                const loadingTask = window.pdfjsLib.getDocument({ data: event.target.result });
+                const pdf = await loadingTask.promise;
+                setPdfDoc(pdf);
+                setTotalPages(pdf.numPages);
+                renderPdfPage(pdf, 1); // Render the first page immediately
+              } catch (pdfError) {
+                console.error('Error loading PDF:', pdfError);
+                setError('Failed to load PDF. The file might be corrupted or invalid.');
+                handleRemoveImage();
+              }
+            };
+            reader.onerror = () => {
+               setError('Failed to read the PDF file.');
+               handleRemoveImage();
+            }
+            reader.readAsArrayBuffer(file);
+          } else if (file.type.startsWith('image/')) {
+            // Handle image files
+            setPdfDoc(null);
+            setTotalPages(0);
+            setCurrentPage(1);
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              // Get the data URL
+              const imageDataUrl = e.target.result;
+              
+              // Set the image and enter cropping mode
+              setImage(imageDataUrl);
+              setImagePreview(null);
+              setIsCropping(true);
+              
+              // Initialize cropper on next render
+              setTimeout(() => {
+                if (cropperImageRef.current) {
+                  cropperImageRef.current.src = imageDataUrl;
+                  cropperImageRef.current.style.display = 'block';
+                  initializeCropper();
+                }
+              }, 100);
+            };
+            reader.onerror = () => {
+              setError('Failed to read the image file.');
+              handleRemoveImage();
+            };
+            reader.readAsDataURL(file);
+          } else {
+            alert('Please upload an image (JPEG, PNG, GIF) or PDF file');
+            handleRemoveImage();
+          }
         };
 
         const handleRemoveImage = () => {
@@ -775,10 +919,17 @@
           if (image && image.startsWith('blob:')) {
             URL.revokeObjectURL(image);
           }
-           if (imagePreview && imagePreview.startsWith('blob:')) {
+          if (imagePreview && imagePreview.startsWith('blob:')) {
             URL.revokeObjectURL(imagePreview);
           }
 
+          // Destroy cropper instance if it exists
+          if (cropperInstanceRef.current) {
+            cropperInstanceRef.current.destroy();
+            cropperInstanceRef.current = null;
+          }
+
+          // Reset state
           setImage(null);
           setImagePreview(null);
           setFileType(null);
@@ -786,93 +937,67 @@
           setPdfDoc(null);
           setCurrentPage(1);
           setTotalPages(0);
-          setCrop({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 });
           setCompletedCrop(null);
-           // Clear the file input
+          
+          // Reset the file input
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
-        };
-
-
-        // --- Cropping Handling ---
-        const onImageLoad = (img) => {
-          imgRef.current = img; // Save the image reference when it loads
-        };
-
-        // Function to get the cropped image data URL (updated for ReactCrop v8.6.6)
-        const getCroppedImg = (sourceImage, crop, canvasRef) => {
-          if (!sourceImage || !canvasRef.current || !crop || !crop.width || !crop.height) {
-              console.error("Missing data for cropping", {sourceImage, canvasRef, crop});
-              return null;
-          }
-
-          const canvas = canvasRef.current;
-          const scaleX = sourceImage.naturalWidth / sourceImage.width;
-          const scaleY = sourceImage.naturalHeight / sourceImage.height;
-          const pixelRatio = window.devicePixelRatio || 1;
-
-          canvas.width = Math.floor(crop.width * scaleX * pixelRatio);
-          canvas.height = Math.floor(crop.height * scaleY * pixelRatio);
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-              console.error("Could not get canvas context");
-              return null;
-          }
-
-          ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-          ctx.imageSmoothingQuality = 'high';
-
-          ctx.drawImage(
-              sourceImage,
-              crop.x * scaleX,
-              crop.y * scaleY,
-              crop.width * scaleX,
-              crop.height * scaleY,
-              0,
-              0,
-              crop.width * scaleX,
-              crop.height * scaleY
-          );
-
-          // Reset transform before getting data URL
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-          try {
-              return canvas.toDataURL('image/jpeg');
-          } catch (e) {
-              console.error("Error creating data URL from canvas", e);
-              return null;
+          
+          // Hide the cropper image
+          if (cropperImageRef.current) {
+            cropperImageRef.current.src = '';
+            cropperImageRef.current.style.display = 'none';
+            cropperImageRef.current.classList.remove('loaded');
           }
         };
 
         const handleCropComplete = () => {
-           if (!completedCrop || !imgRef.current) {
-                console.error("Crop details or image ref not available.");
-                setError("Could not apply crop. Please try again.");
-                return;
+          if (!cropperInstanceRef.current) {
+            setError("Cropper not initialized.");
+            return;
+          }
+          
+          try {
+            // Get cropped canvas from CropperJS
+            const croppedCanvas = cropperInstanceRef.current.getCroppedCanvas({
+              imageSmoothingEnabled: true,
+              imageSmoothingQuality: 'high',
+            });
+            
+            if (!croppedCanvas) {
+              setError("Could not get cropped image. Please try again.");
+              return;
             }
-
-            const croppedImageDataUrl = getCroppedImg(imgRef.current, completedCrop, previewCanvasRef);
-
-            if (croppedImageDataUrl) {
-                setImagePreview(croppedImageDataUrl); // Set the final preview to the cropped image
-                setImage(null); // Clear the source image/PDF page
-                setIsCropping(false); // Exit cropping mode
-                setPdfDoc(null); // Clear PDF doc state
-                setTotalPages(0);
-                setCurrentPage(1);
-                 // Optionally clear the file input
-                if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                }
-            } else {
-                setError("Failed to generate cropped image. Please try again.");
-                 // Optionally reset to previous state or allow retry
+            
+            // Convert to data URL
+            const croppedImageDataUrl = croppedCanvas.toDataURL('image/jpeg');
+            
+            // Set as the preview image
+            setImagePreview(croppedImageDataUrl);
+            setImage(null);
+            setIsCropping(false);
+            
+            // Cleanup
+            if (cropperInstanceRef.current) {
+              cropperInstanceRef.current.destroy();
+              cropperInstanceRef.current = null;
             }
+            
+            // Clear PDF data
+            setPdfDoc(null);
+            setTotalPages(0);
+            setCurrentPage(1);
+            
+            // Clear the file input
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+          } catch (e) {
+            console.error("Error creating cropped image:", e);
+            setError("Failed to generate cropped image. Please try again.");
+          }
         };
-
 
         // --- Form Handling ---
         const handleAddOption = () => {
@@ -996,29 +1121,23 @@
                                       <button type="button" onClick={handleNextPage} disabled={currentPage >= totalPages || isRenderingPdf}>Next</button>
                                   </div>
                                )}
-                               {/* Check for ReactCrop just before rendering */}
-                               {(() => {
-                                 // We're using our custom ReactCropWrapper that checks internally
-                                 return (
-                                   <ReactCropWrapper
-                                     src={image}
-                                     crop={crop}
-                                     onChange={newCrop => setCrop(newCrop)}
-                                     onComplete={completedCrop => setCompletedCrop(completedCrop)}
-                                     onImageLoaded={onImageLoad}
-                                     keepSelection={true}
-                                   />
-                                 );
-                               })()}
-                                {/* End of IIFE */}
-
+                               
+                               {/* CropperJS Image Element */}
+                               <img 
+                                 ref={cropperImageRef} 
+                                 id="cropperImage" 
+                                 src={image} 
+                                 alt="Crop Source" 
+                                 style={{ display: isRenderingPdf ? 'none' : 'block' }} 
+                               />
+                               
                                {isRenderingPdf && <p>Loading PDF page...</p>}
                                <div className="crop-controls">
                                    <button
                                        type="button"
                                        onClick={handleCropComplete}
                                        className="crop-button"
-                                       disabled={!completedCrop || !completedCrop.width || !completedCrop.height || isRenderingPdf}
+                                       disabled={!completedCrop || isRenderingPdf}
                                    >
                                        Apply Crop
                                    </button>
@@ -1036,10 +1155,6 @@
                               </button>
                           </div>
                       )}
-
-                       {/* Hidden canvas for generating cropped image data */}
-                       <canvas ref={previewCanvasRef} style={{ display: 'none' }} />
-
 
                       {/* Hidden File Input */}
                       <input
