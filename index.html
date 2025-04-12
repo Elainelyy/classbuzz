@@ -8,8 +8,8 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/react-image-crop/dist/ReactCrop.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <style>
         body { margin: 0; font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -571,18 +571,9 @@
         const [image, setImage] = useState(initialData?.image_url || null);
         const [imagePreview, setImagePreview] = useState(initialData?.image_url || null);
         const [isCropping, setIsCropping] = useState(false);
-        const [crop, setCrop] = useState({ aspect: 16 / 9 });
-        const [croppedImage, setCroppedImage] = useState(null);
+        const [cropperInstance, setCropperInstance] = useState(null);
         const imageRef = useRef(null);
         const fileInputRef = useRef(null);
-        const [isReactCropLoaded, setIsReactCropLoaded] = useState(false);
-
-        // Check if ReactCrop is loaded
-        useEffect(() => {
-          if (window.ReactCrop) {
-            setIsReactCropLoaded(true);
-          }
-        }, []);
 
         const handleImageUpload = (e) => {
           const file = e.target.files[0];
@@ -591,45 +582,54 @@
             reader.onload = (e) => {
               setImage(e.target.result);
               setImagePreview(e.target.result);
-              if (isReactCropLoaded) {
-                setIsCropping(true);
-              } else {
-                alert('Image cropping is not available at the moment. Please try again later.');
-              }
+              setIsCropping(true);
             };
             reader.readAsDataURL(file);
           }
         };
 
-        const handleCropComplete = (croppedArea, croppedAreaPixels) => {
-          if (!image || !croppedAreaPixels) return;
+        // Initialize Cropper when image is loaded
+        useEffect(() => {
+          if (isCropping && image && imageRef.current) {
+            if (cropperInstance) {
+              cropperInstance.destroy();
+            }
+            
+            const cropper = new Cropper(imageRef.current, {
+              viewMode: 1,
+              dragMode: 'crop',
+              autoCrop: false,
+              zoomable: true,
+              scalable: false,
+              movable: true,
+              background: false,
+              checkOrientation: false,
+              ready() {
+                console.log("Cropper is ready");
+              }
+            });
+            
+            setCropperInstance(cropper);
+          }
+        }, [isCropping, image]);
 
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const imageObj = new Image();
+        const handleCropComplete = () => {
+          if (cropperInstance) {
+            const croppedCanvas = cropperInstance.getCroppedCanvas({
+              imageSmoothingEnabled: true,
+              imageSmoothingQuality: 'high',
+            });
 
-          imageObj.onload = () => {
-            canvas.width = croppedAreaPixels.width;
-            canvas.height = croppedAreaPixels.height;
-
-            ctx.drawImage(
-              imageObj,
-              croppedAreaPixels.x,
-              croppedAreaPixels.y,
-              croppedAreaPixels.width,
-              croppedAreaPixels.height,
-              0,
-              0,
-              croppedAreaPixels.width,
-              croppedAreaPixels.height
-            );
-
-            const croppedImageUrl = canvas.toDataURL('image/jpeg');
-            setCroppedImage(croppedImageUrl);
-            setImagePreview(croppedImageUrl);
-          };
-
-          imageObj.src = image;
+            if (croppedCanvas) {
+              const croppedImageUrl = croppedCanvas.toDataURL('image/jpeg');
+              setImagePreview(croppedImageUrl);
+              setIsCropping(false);
+              if (cropperInstance) {
+                cropperInstance.destroy();
+                setCropperInstance(null);
+              }
+            }
+          }
         };
 
         const handleSubmit = (e) => {
@@ -688,30 +688,18 @@
                     </div>
                   )}
                   
-                  {isCropping && image && isReactCropLoaded && (
+                  {isCropping && image && (
                     <div className="image-crop-container">
-                      <ReactCrop
-                        crop={crop}
-                        onChange={(c) => setCrop(c)}
-                        onComplete={handleCropComplete}
-                        aspect={16/9}
-                      >
-                        <img 
-                          src={image} 
-                          ref={imageRef} 
-                          alt="Crop" 
-                          style={{ maxWidth: '100%', maxHeight: '400px' }}
-                        />
-                      </ReactCrop>
+                      <img 
+                        ref={imageRef} 
+                        src={image} 
+                        alt="Crop" 
+                        style={{ maxWidth: '100%', maxHeight: '400px' }}
+                      />
                       <div className="crop-controls">
                         <button
                           type="button"
-                          onClick={() => {
-                            setIsCropping(false);
-                            if (croppedImage) {
-                              setImagePreview(croppedImage);
-                            }
-                          }}
+                          onClick={handleCropComplete}
                           className="crop-button"
                         >
                           Done Cropping
@@ -742,7 +730,10 @@
                           setImage(null);
                           setImagePreview(null);
                           setIsCropping(false);
-                          setCroppedImage(null);
+                          if (cropperInstance) {
+                            cropperInstance.destroy();
+                            setCropperInstance(null);
+                          }
                         }}
                         className="remove-image"
                       >
