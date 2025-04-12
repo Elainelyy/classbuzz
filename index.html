@@ -72,6 +72,32 @@
 
         .image-upload-container {
             margin-top: 10px;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .image-upload-container.drag-over {
+            border-color: #4CAF50;
+            background-color: rgba(76, 175, 80, 0.05);
+        }
+
+        .upload-area {
+            cursor: pointer;
+            padding: 20px;
+        }
+
+        .upload-area p {
+            margin: 10px 0;
+            color: #6b7280;
+        }
+
+        .upload-area .upload-icon {
+            font-size: 48px;
+            color: #9ca3af;
+            margin-bottom: 10px;
         }
 
         .image-preview-container {
@@ -162,6 +188,41 @@
 
         .remove-image:hover {
             background: #d32f2f;
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .cancel-button {
+            background: #f3f4f6;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .cancel-button:hover {
+            background: #e5e7eb;
+        }
+
+        .save-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .save-button:hover {
+            background: #45a049;
         }
      </style>
 </head>
@@ -530,13 +591,29 @@
         const handleImageUpload = (e) => {
           const file = e.target.files[0];
           if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              setImage(e.target.result);
-              setImagePreview(e.target.result);
-              setIsCropping(true);
-            };
-            reader.readAsDataURL(file);
+            if (file.type === 'application/pdf') {
+              // Handle PDF file
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                // Create a PDF object URL
+                const pdfUrl = URL.createObjectURL(file);
+                setImage(pdfUrl);
+                setImagePreview(pdfUrl);
+                setIsCropping(false); // Don't show cropping for PDFs
+              };
+              reader.readAsArrayBuffer(file);
+            } else if (file.type.startsWith('image/')) {
+              // Handle image file
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                setImage(e.target.result);
+                setImagePreview(e.target.result);
+                setIsCropping(true);
+              };
+              reader.readAsDataURL(file);
+            } else {
+              alert('Please upload an image or PDF file');
+            }
           }
         };
 
@@ -632,15 +709,39 @@
               </div>
 
               <div className="form-group">
-                <label>Image (optional if question is provided):</label>
-                <div className="image-upload-container">
-                  {imagePreview && !isCropping && (
+                <label>Image or PDF (optional if question is provided):</label>
+                <div 
+                  className="image-upload-container"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.add('drag-over');
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('drag-over');
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('drag-over');
+                    const file = e.dataTransfer.files[0];
+                    if (file) {
+                      handleImageUpload({ target: { files: [file] } });
+                    }
+                  }}
+                >
+                  {imagePreview && !isCropping ? (
                     <div className="image-preview-container">
-                      <img src={imagePreview} alt="Preview" className="image-preview" />
+                      {imagePreview.endsWith('.pdf') ? (
+                        <iframe 
+                          src={imagePreview} 
+                          className="image-preview"
+                          style={{ width: '100%', height: '400px' }}
+                        />
+                      ) : (
+                        <img src={imagePreview} alt="Preview" className="image-preview" />
+                      )}
                     </div>
-                  )}
-                  
-                  {isCropping && image && (
+                  ) : isCropping && image ? (
                     <div className="image-crop-container">
                       <img 
                         ref={imageRef} 
@@ -658,41 +759,44 @@
                         </button>
                       </div>
                     </div>
-                  )}
-
-                  <div style={{ marginTop: '10px' }}>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      style={{ display: 'none' }}
-                    />
-                    <button
-                      type="button"
-                      className="upload-button"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      {imagePreview ? 'Replace Image' : 'Upload Image'}
-                    </button>
-                    {imagePreview && (
+                  ) : (
+                    <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
+                      <div className="upload-icon">📁</div>
+                      <p>Drag and drop an image or PDF here</p>
+                      <p>or</p>
                       <button
                         type="button"
-                        onClick={() => {
-                          setImage(null);
-                          setImagePreview(null);
-                          setIsCropping(false);
-                          if (cropperInstance) {
-                            cropperInstance.destroy();
-                            setCropperInstance(null);
-                          }
-                        }}
-                        className="remove-image"
+                        className="upload-button"
                       >
-                        Remove
+                        Browse Files
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*,.pdf"
+                    onChange={handleImageUpload}
+                    style={{ display: 'none' }}
+                  />
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImage(null);
+                        setImagePreview(null);
+                        setIsCropping(false);
+                        if (cropperInstance) {
+                          cropperInstance.destroy();
+                          setCropperInstance(null);
+                        }
+                      }}
+                      className="remove-image"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
 
