@@ -13,6 +13,12 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     
+    <!-- ReactCrop for cropping images in React components -->
+    <script type="module">
+      import ReactCrop from 'https://cdn.jsdelivr.net/npm/react-image-crop@11.0.5/dist/ReactCrop.min.mjs';
+      window.ReactCropESM = ReactCrop;
+    </script>
+    
     <!-- PDF.js for PDF rendering -->
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/build/pdf.min.js"></script>
     <script>
@@ -669,74 +675,41 @@
       }
 
       function PollEditor({ poll, onSave, onCancel }) {
-        const { useState, useEffect, useRef } = React;
-
-        // --- State Variables ---
-        const [question, setQuestion] = useState('');
-        const [options, setOptions] = useState(['', '']);
-        const [pollType, setPollType] = useState('single_choice');
-        const [isLoading, setIsLoading] = useState(false);
-        const [error, setError] = useState(null);
-
-        // Image/PDF related state
-        const [image, setImage] = useState(null); // Will store the image data URL
-        const [imagePreview, setImagePreview] = useState(null); // For displaying the final cropped result
-        const [fileType, setFileType] = useState(null);
+        // --- State Management ---
+        const [question, setQuestion] = useState(poll ? poll.question : '');
+        const [options, setOptions] = useState(poll ? poll.options : ['', '']);
+        const [pollType, setPollType] = useState(poll ? poll.poll_type : 'single_choice');
+        
+        // Image/PDF state
+        const [image, setImage] = useState(null);
+        const [imagePreview, setImagePreview] = useState(poll && poll.image_url ? poll.image_url : null);
         const [isCropping, setIsCropping] = useState(false);
-        const [completedCrop, setCompletedCrop] = useState(null); // Will store the cropped data URL
-        
-        // Refs for CropperJS
-        const cropperImageRef = useRef(null);
-        const cropperInstanceRef = useRef(null);
-        const fileInputRef = useRef(null); // Ref for file input
-        
-        // PDF specific state
+        const [fileType, setFileType] = useState(null);
+        const [completedCrop, setCompletedCrop] = useState(null);
         const [pdfDoc, setPdfDoc] = useState(null);
         const [currentPage, setCurrentPage] = useState(1);
         const [totalPages, setTotalPages] = useState(0);
         const [isRenderingPdf, setIsRenderingPdf] = useState(false);
         
-        // Effect to initialize PDF.js worker
-        useEffect(() => {
-          if (window.pdfjsLib) {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/build/pdf.worker.min.js`;
-          } else {
-            console.error("PDF.js library not loaded.");
-            setError("Failed to load PDF rendering library.");
-          }
-        }, []);
+        // UI state
+        const [isLoading, setIsLoading] = useState(false);
+        const [error, setError] = useState(null);
         
-        // Cleanup cropper instance on unmount
-        useEffect(() => {
-          return () => {
-            if (cropperInstanceRef.current) {
-              cropperInstanceRef.current.destroy();
-              cropperInstanceRef.current = null;
-            }
-          };
-        }, []);
-
-        // Effect to load poll data when editing
+        // --- Refs ---
+        const fileInputRef = useRef(null);
+        const cropperImageRef = useRef(null);
+        const cropperInstanceRef = useRef(null);
+        
+        // --- Effects ---
+        // Initialize with poll data if editing
         useEffect(() => {
           if (poll) {
             setQuestion(poll.question || '');
-            setOptions(poll.options || ['', '']);
+            setOptions(poll.options?.length ? poll.options : ['', '']);
             setPollType(poll.poll_type || 'single_choice');
+            setImagePreview(poll.image_url || null);
             
-            // If editing, load existing image URL for preview only
-            if (poll.image_url) {
-              setImagePreview(poll.image_url); // Show existing final image
-              setImage(null); // Clear the source image state
-              setFileType(null); // Clear file type
-              setIsCropping(false); // Not cropping initially when editing
-            } else {
-              handleRemoveImage(); // Reset if no image URL
-            }
-          } else {
-            // Reset form when creating a new poll
-            setQuestion('');
-            setOptions(['', '']);
-            setPollType('single_choice');
+            // Clean up if poll changes
             handleRemoveImage(); // Ensure image state is reset
           }
         }, [poll]);
@@ -1383,6 +1356,18 @@
                 const errorData = await response.json().catch(() => ({})); // Try to parse error JSON
                 console.error('Server error response:', errorData);
                 throw new Error(errorData.error || `Failed to save poll (Status: ${response.status})`);
+              }
+
+              // Parse response JSON only once
+              const responseData = await response.json();
+              console.log('Server response after saving poll:', responseData);
+
+              // If we have a poll ID in the response, update the current editing poll ID
+              if (responseData && responseData.id) {
+                // Update editingPollId if this was a new poll
+                if (!pollData.id) {
+                  setEditingPollId(responseData.id);
+                }
               }
 
               // Success: Refetch polls to update the list
