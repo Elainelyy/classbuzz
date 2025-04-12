@@ -607,7 +607,7 @@
         const [imagePreview, setImagePreview] = useState(null); // Holds the *final* preview (original image or cropped result)
         const [fileType, setFileType] = useState(null);
         const [isCropping, setIsCropping] = useState(false);
-        const [crop, setCrop] = useState({ unit: 'px', x: 0, y: 0, width: 100, height: 100 }); // Start with pixel units for canvas
+        const [crop, setCrop] = useState({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 }); // Initialize with default crop
         const [completedCrop, setCompletedCrop] = useState(null); // Stores the completed crop details
 
         // PDF specific state
@@ -683,7 +683,7 @@
             setFileType('image/png'); // Treat the rendered page as an image
 
             // Reset crop state when page changes
-            setCrop({ unit: 'px', x: 0, y: 0, width: 100, height: 100 });
+            setCrop({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 });
             setCompletedCrop(null);
 
           } catch (pdfError) {
@@ -749,8 +749,8 @@
                 setImage(objectUrl); // Set source for cropping
                 setImagePreview(null); // Clear final preview
                 setIsCropping(true); // Enter cropping mode
-                // Reset crop state
-                setCrop({ unit: '%', width: 50, aspect: 1 }); // Use % for images initially
+                // Reset crop state for ReactCrop v8.6.6
+                setCrop({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 });
                 setCompletedCrop(null);
             } else {
                 alert('Please upload an image (JPEG, PNG, GIF) or PDF file');
@@ -774,7 +774,7 @@
           setPdfDoc(null);
           setCurrentPage(1);
           setTotalPages(0);
-          setCrop({ unit: '%', width: 50, aspect: 1 });
+          setCrop({ aspect: 16/9, width: 30, height: 30, x: 10, y: 10 });
           setCompletedCrop(null);
            // Clear the file input
           if (fileInputRef.current) {
@@ -784,28 +784,24 @@
 
 
         // --- Cropping Handling ---
-        const onImageLoad = (e) => {
-          // You can potentially adjust the initial crop here based on image dimensions
-          // For example: const { naturalWidth: width, naturalHeight: height } = e.currentTarget;
-          // console.log("Image loaded for cropping:", e.currentTarget.src.substring(0, 100));
+        const onImageLoad = (img) => {
+          imgRef.current = img; // Save the image reference when it loads
         };
 
-        // Function to get the cropped image data URL
-        const getCroppedImg = (sourceImage, cropData, canvasRef) => {
-          const canvas = canvasRef.current;
-          const imageElement = sourceImage; // This should be the actual image element used by ReactCrop
-
-          if (!imageElement || !canvas || !cropData || !cropData.width || !cropData.height) {
-              console.error("Missing data for cropping", {imageElement, canvas, cropData});
+        // Function to get the cropped image data URL (updated for ReactCrop v8.6.6)
+        const getCroppedImg = (sourceImage, crop, canvasRef) => {
+          if (!sourceImage || !canvasRef.current || !crop || !crop.width || !crop.height) {
+              console.error("Missing data for cropping", {sourceImage, canvasRef, crop});
               return null;
           }
 
-          const scaleX = imageElement.naturalWidth / imageElement.width;
-          const scaleY = imageElement.naturalHeight / imageElement.height;
+          const canvas = canvasRef.current;
+          const scaleX = sourceImage.naturalWidth / sourceImage.width;
+          const scaleY = sourceImage.naturalHeight / sourceImage.height;
           const pixelRatio = window.devicePixelRatio || 1;
 
-          canvas.width = Math.floor(cropData.width * scaleX * pixelRatio);
-          canvas.height = Math.floor(cropData.height * scaleY * pixelRatio);
+          canvas.width = Math.floor(crop.width * scaleX * pixelRatio);
+          canvas.height = Math.floor(crop.height * scaleY * pixelRatio);
 
           const ctx = canvas.getContext('2d');
           if (!ctx) {
@@ -817,28 +813,27 @@
           ctx.imageSmoothingQuality = 'high';
 
           ctx.drawImage(
-              imageElement,
-              cropData.x * scaleX,
-              cropData.y * scaleY,
-              cropData.width * scaleX,
-              cropData.height * scaleY,
+              sourceImage,
+              crop.x * scaleX,
+              crop.y * scaleY,
+              crop.width * scaleX,
+              crop.height * scaleY,
               0,
               0,
-              cropData.width * scaleX,
-              cropData.height * scaleY
+              crop.width * scaleX,
+              crop.height * scaleY
           );
 
           // Reset transform before getting data URL
           ctx.setTransform(1, 0, 0, 1, 0, 0);
 
           try {
-              return canvas.toDataURL('image/jpeg'); // Or image/png
+              return canvas.toDataURL('image/jpeg');
           } catch (e) {
               console.error("Error creating data URL from canvas", e);
               return null;
           }
         };
-
 
         const handleCropComplete = () => {
            if (!completedCrop || !imgRef.current) {
@@ -991,33 +986,23 @@
                                )}
                                {/* Check for ReactCrop just before rendering */}
                                {(() => {
-                                 // Check for the component right here
-                                 const CropperComponent = window.ReactCrop?.default || window.ReactCrop;
-                                 
-                                 if (!CropperComponent) {
-                                   // Log the error only if we actually needed the component now
+                                 // For version 8.6.6, ReactCrop is directly available as a global
+                                 if (!window.ReactCrop) {
                                    console.error("Error: ReactCrop component not found when needed for rendering.");
                                    return <p className="error-message">Error: Cropping component failed to load.</p>;
                                  }
                                  
-                                 // If found, render it
+                                 // If found, render it - v8.6.6 usage is different from v9
                                  return (
-                                   <CropperComponent
+                                   <ReactCrop
+                                     src={image}
                                      crop={crop}
-                                     onChange={(c) => setCrop(c)}
-                                     onComplete={(c) => setCompletedCrop(c)}
-                                     aspect={undefined} // Allow free aspect ratio, or set e.g., 1 for square
-                                   >
-                                     <img
-                                       ref={imgRef}
-                                       src={image}
-                                       alt="Crop Source"
-                                       style={{ maxHeight: '400px', maxWidth: '100%', display: isRenderingPdf ? 'none' : 'block' }}
-                                       onLoad={onImageLoad}
-                                     />
-                                   </CropperComponent>
+                                     onChange={newCrop => setCrop(newCrop)}
+                                     onComplete={completedCrop => setCompletedCrop(completedCrop)}
+                                     onImageLoaded={onImageLoad}
+                                   />
                                  );
-                               })()} 
+                               })()}
                                 {/* End of IIFE */}
 
                                {isRenderingPdf && <p>Loading PDF page...</p>}
