@@ -190,10 +190,10 @@ app.get('/api/polls', async (req, res) => {
 
 app.post('/api/polls', async (req, res) => {
   try {
-    const { question, options, poll_type, image_url } = req.body;
+    const { question, options, poll_type, imageDataUrl, existingImageUrl } = req.body;
     
-    // Validate that at least one of question or image_url is provided
-    if (!question && !image_url) {
+    // Validate that at least one of question or image is provided
+    if (!question && !imageDataUrl && !existingImageUrl) {
       return res.status(400).json({ error: 'Either question or image must be provided' });
     }
     
@@ -201,6 +201,44 @@ app.post('/api/polls', async (req, res) => {
       return res.status(400).json({ error: 'Poll type is required' });
     }
 
+    let image_url = existingImageUrl; // Use existing URL if provided
+    
+    // Process image data URL if provided (upload to S3)
+    if (imageDataUrl) {
+      try {
+        console.log('Processing image data URL for S3 upload');
+        
+        // Extract the base64 data
+        const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        // Generate a unique filename
+        const fileName = `polls/${Date.now()}-${Math.random().toString(36).substring(2)}.jpg`;
+        
+        // Determine content type from data URL
+        const contentType = imageDataUrl.match(/^data:(.*?);/)[1] || 'image/jpeg';
+        
+        // Upload to S3
+        const command = new PutObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: fileName,
+          Body: buffer,
+          ContentType: contentType
+        });
+        
+        await s3Client.send(command);
+        console.log('S3 upload successful for new poll image');
+        
+        // Construct the S3 URL
+        image_url = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+        console.log('Generated S3 URL:', image_url);
+      } catch (uploadError) {
+        console.error('Error uploading image to S3:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload image to S3' });
+      }
+    }
+
+    // Create the poll with the image URL (either from S3 upload or existing)
     const poll = await db.createPoll(question || '', options, poll_type, image_url);
     res.status(201).json(poll);
   } catch (error) {
@@ -213,10 +251,14 @@ app.post('/api/polls', async (req, res) => {
 app.patch('/api/polls/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { question, options, poll_type, image_url } = req.body;
+    const { question, options, poll_type, imageDataUrl, existingImageUrl } = req.body;
     
-    if (!question || !poll_type) {
-      return res.status(400).json({ error: 'Question and poll type are required' });
+    if (!question && !imageDataUrl && !existingImageUrl) {
+      return res.status(400).json({ error: 'Either question or image must be provided' });
+    }
+    
+    if (!poll_type) {
+      return res.status(400).json({ error: 'Poll type is required' });
     }
     
     // Validate poll_type
@@ -231,7 +273,74 @@ app.patch('/api/polls/:id', async (req, res) => {
       });
     }
     
-    const updatedPoll = await db.updatePoll(id, { question, options, poll_type, image_url });
+    // Get existing poll to check if we need to delete old image
+    const existingPoll = await db.getPollById(id);
+    if (!existingPoll) {
+      return res.status(404).json({ error: 'Poll not found' });
+    }
+    
+    let image_url = existingImageUrl;
+    
+    // Process image data URL if provided (upload to S3)
+    if (imageDataUrl) {
+      try {
+        console.log('Processing image data URL for S3 upload (update)');
+        
+        // Extract the base64 data
+        const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        // Generate a unique filename
+        const fileName = `polls/${Date.now()}-${Math.random().toString(36).substring(2)}.jpg`;
+        
+        // Determine content type from data URL
+        const contentType = imageDataUrl.match(/^data:(.*?);/)[1] || 'image/jpeg';
+        
+        // Upload to S3
+        const command = new PutObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: fileName,
+          Body: buffer,
+          ContentType: contentType
+        });
+        
+        await s3Client.send(command);
+        console.log('S3 upload successful for updated poll image');
+        
+        // Construct the S3 URL
+        image_url = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+        console.log('Generated S3 URL:', image_url);
+        
+        // If there was a previous image, attempt to delete it
+        if (existingPoll.image_url && existingPoll.image_url !== image_url && existingPoll.image_url !== existingImageUrl) {
+          try {
+            const s3Key = extractS3KeyFromUrl(existingPoll.image_url);
+            if (s3Key) {
+              await s3Client.send(new DeleteObjectCommand({
+                Bucket: process.env.AWS_S3_BUCKET_NAME,
+                Key: s3Key
+              }));
+              console.log(`Successfully deleted old image from S3: ${s3Key}`);
+            }
+          } catch (deleteError) {
+            console.error('Error deleting old image from S3:', deleteError);
+            // Continue even if deletion fails
+          }
+        }
+      } catch (uploadError) {
+        console.error('Error uploading image to S3:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload image to S3' });
+      }
+    }
+    
+    // Update the poll with the image URL (either from S3 upload or existing)
+    const updatedPoll = await db.updatePoll(id, { 
+      question, 
+      options, 
+      poll_type, 
+      image_url 
+    });
+    
     res.json(updatedPoll);
   } catch (error) {
     console.error('Error updating poll:', error);
