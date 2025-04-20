@@ -49,8 +49,6 @@ const upload = multer({
 app.use(cors());
 // Enable Express to parse JSON request bodies with increased size limit
 app.use(express.json({ limit: '10mb' }));
-
-const path = require('path'); // Make sure to require 'path' at the top
 // Serve static files ONLY from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
