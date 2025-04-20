@@ -1,0 +1,423 @@
+/* Base styles */
+body {
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    background-color: #f9fafb;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Common styles */
+.dot {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Message boxes */
+.message-box {
+    text-align: center;
+    padding: 20px;
+    margin-top: 20px;
+    border-radius: 8px;
+}
+
+.loading {
+    background-color: #e0f2fe;
+    color: #0c4a6e;
+}
+
+.error {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.error-inline {
+    color: #991b1b;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+/* Poll specific styles */
+.poll-option {
+    cursor: pointer;
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.poll-option:hover {
+    background-color: #f9fafb;
+}
+
+.poll-option.selected {
+    background-color: #e0e7ff;
+    border-color: #a5b4fc;
+}
+
+.poll-option.disabled {
+    cursor: not-allowed;
+    background-color: #f9fafb;
+    color: #9ca3af;
+}
+
+.poll-option.submitted {
+    cursor: default;
+}
+
+/* Result bars */
+.result-bar-bg {
+    background-color: #e5e7eb;
+    height: 1.5rem;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.result-bar {
+    background-color: #6366f1;
+    height: 100%;
+    transition: width 0.3s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+    color: white;
+    font-size: 0.75rem;
+}
+
+.result-label {
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+
+.result-percentage {
+    font-weight: 500;
+}
+
+/* Poll list items */
+.poll-list-item {
+    border: 1px solid #e5e7eb;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: white;
+    margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.poll-list-item .status-badge {
+    font-size: 0.75rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.poll-list-item .status-idle {
+    background-color: #d1d5db;
+    color: #4b5563;
+}
+
+.poll-list-item .status-active {
+    background-color: #a7f3d0;
+    color: #047857;
+}
+
+.poll-list-item .status-ended {
+    background-color: #fecaca;
+    color: #b91c1c;
+}
+
+/* Poll editor styles */
+.poll-editor {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+.poll-editor .form-group {
+    margin-bottom: 15px;
+}
+
+.poll-editor .image-crop-container .crop-controls {
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+    gap: 10px;
+}
+
+.poll-editor .crop-button,
+.poll-editor .use-original-button,
+.poll-editor .cancel-crop-button {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.poll-editor .crop-button {
+    background-color: #4caf50;
+    color: white;
+}
+
+.poll-editor .use-original-button {
+    background-color: #2196F3;
+    color: white;
+}
+
+.poll-editor .cancel-crop-button {
+    background-color: #f44336;
+    color: white;
+}
+
+.poll-editor .crop-button:disabled,
+.poll-editor .use-original-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+
+/* Image upload styles */
+.image-upload-container {
+    margin-top: 10px;
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.image-upload-container.drag-over {
+    border-color: #4CAF50;
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+.upload-area {
+    cursor: pointer;
+    padding: 20px;
+}
+
+.upload-area p {
+    margin: 10px 0;
+    color: #6b7280;
+}
+
+.upload-area .upload-icon {
+    font-size: 48px;
+    color: #9ca3af;
+    margin-bottom: 10px;
+}
+
+/* Image preview and crop styles */
+.image-preview-container {
+    width: 100%;
+    max-height: 400px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    margin-bottom: 10px;
+    background-color: #f3f4f6;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.image-preview {
+    max-width: 100%;
+    max-height: 380px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+
+.image-crop-container {
+    width: 100%;
+    max-height: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 10px;
+    background-color: #f3f4f6;
+    border-radius: 8px;
+    padding: 10px;
+    overflow: hidden;
+}
+
+/* Button styles */
+.upload-button {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.upload-button:hover {
+    background: #45a049;
+}
+
+.cancel-button {
+    background: #f3f4f6;
+    color: #4b5563;
+    border: 1px solid #d1d5db;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.cancel-button:hover {
+    background: #e5e7eb;
+}
+
+.save-button {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.save-button:hover {
+    background: #45a049;
+}
+
+.save-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Poll editor controls */
+.crop-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+.option-input {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.add-option {
+    background-color: #e0e7ff;
+    color: #4338ca;
+    padding: 8px 15px;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    margin-top: 10px;
+}
+
+.add-option:hover {
+    background-color: #c7d2fe;
+}
+
+.remove-option {
+    background-color: #fee2e2;
+    color: #991b1b;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    border: none;
+}
+
+.remove-option:hover {
+    background-color: #fecaca;
+}
+
+/* PDF navigation styles */
+.pdf-navigation {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
+.pdf-navigation button {
+    padding: 5px 10px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.pdf-navigation button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.pdf-navigation span {
+    font-weight: bold;
+}
+
+/* CropperJS specific styles */
+.cropper-container {
+    max-height: 400px !important;
+}
+
+.cropper-view-box,
+.cropper-face {
+    border-radius: 0.375rem;
+}
+
+.cropper-drag-box {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+#cropperImage {
+    display: none;
+    max-width: 100%;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+#cropperImage.loaded {
+    opacity: 1;
+}

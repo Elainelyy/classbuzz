@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image & PDF Cropper (Cropper.js)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script>
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+
+        /* --- Cropper Container Styling --- */
+        #cropper-container {
+            width: 100%;
+            max-height: 70vh;
+            margin-bottom: 1rem; /* mb-4 */
+            background-color: #f9fafb; /* gray-50 */
+             border: 1px solid #d1d5db; /* gray-300 */
+             border-radius: 0.375rem; /* rounded-md */
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             min-height: 250px;
+             overflow: hidden;
+        }
+         #cropperImage {
+            display: none;
+            max-width: 100%;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+         }
+         #cropperImage.loaded {
+             opacity: 1;
+         }
+         #cropper-container.drag-over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+         #placeholder-text {
+            @apply flex flex-col items-center justify-center text-gray-500 p-4 text-center z-0 pointer-events-none;
+         }
+         #placeholder-text svg { @apply w-12 h-12 mb-2 text-gray-400; }
+
+        /* --- PDF Navigation - Spinner Hiding --- */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none; margin: 0;
+        }
+        input[type=number] { -moz-appearance: textfield; }
+
+        /* --- File Input Button Styling --- */
+        input[type="file"]::file-selector-button {
+            margin-right: 0.75rem; display: inline-block; font-weight: 600;
+            color: #ffffff; background-color: #2563eb; border: 1px solid #2563eb;
+            border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; transition: background-color 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover { background-color: #1d4ed8; }
+
+        /* --- Message Box Styling --- */
+        #messageBox {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; padding: 0.75rem 1.25rem; border-radius: 0.375rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: none; font-weight: 500; max-width: 90%; text-align: center;
+        }
+        .message-success { background-color: #d1fae5; color: #065f46; }
+        .message-error { background-color: #fee2e2; color: #991b1b; }
+        .message-info { background-color: #dbeafe; color: #1e40af; }
+
+        /* Cropper.js specific overrides if needed */
+        .cropper-view-box,
+        .cropper-face {
+          border-radius: 0.375rem;
+        }
+        /* Ensure drag box is clearly visible */
+        .cropper-drag-box {
+            background-color: rgba(255, 255, 255, 0.3); /* Lighter overlay */
+        }
+
+
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="messageBox"></div>
+
+    <div class="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl font-semibold text-gray-800 mb-6 text-center">Image & PDF Cropper</h1>
+
+        <div class="mb-5">
+            <label for="fileInput" class="block text-sm font-medium text-gray-700 mb-1">Upload Image or PDF:</label>
+            <input type="file" id="fileInput" accept="image/*,application/pdf" class="block w-full text-sm text-gray-900 border border-gray-300 rounded-md cursor-pointer bg-gray-50 focus:outline-none p-1">
+        </div>
+
+        <div class="instructions mb-5">
+             <h2 class="text-md font-medium text-gray-700 mb-2">Instructions:</h2>
+             <ol class="list-decimal list-inside space-y-1 text-sm text-gray-600 mb-4">
+                 <li>Upload an image or PDF using the button or by dragging & dropping onto the area below.</li>
+                 <li>If PDF, select the desired page using the controls below the preview area.</li>
+                 <li>Use the mouse wheel or touch gestures over the preview area to zoom/pan.</li>
+                 <li>Click and drag on the preview area to draw the crop box.</li> {/* Updated instruction */}
+                 <li>Click "Crop & Show Result".</li>
+                 <li>Click "Download Cropped Image" to save the result.</li>
+             </ol>
+        </div>
+
+         <div id="pdfNav" class="hidden flex items-center justify-center gap-2 my-3">
+            <button id="prevPage" type="button" disabled class="shrink-0 inline-flex items-center justify-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 ease-in-out">&larr; Prev</button>
+            <span id="pageInfo" class="shrink-0 text-sm text-gray-700 font-medium px-2">Page</span>
+            <input type="number" id="pageInput" min="1" value="1" class="shrink-0 p-1 border border-gray-300 rounded-md text-center w-16 text-sm">
+            <span id="totalPagesInfo" class="shrink-0 text-sm text-gray-600">of 1</span>
+            <button id="nextPage" type="button" disabled class="shrink-0 inline-flex items-center justify-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 ease-in-out">Next &rarr;</button>
+        </div>
+
+        <div>
+            <h2 class="text-lg font-semibold text-gray-700 mb-3">Preview & Cropping Area:</h2>
+            <div id="cropper-container">
+                <img id="cropperImage" alt="Image preview">
+                <span id="placeholder-text">
+                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                    </svg>
+                    Upload or drop file here
+                </span>
+            </div>
+             </div>
+
+        <div class="flex flex-col sm:flex-row gap-3 justify-center mt-4 mb-4">
+             <button id="cropButton" type="button" disabled class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200">
+                 Crop & Show Result
+             </button>
+             <button id="downloadButton" type="button" disabled class="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-blue-700 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200">
+                Download Cropped Image
+            </button>
+        </div>
+
+        <div>
+             <h2 class="text-lg font-semibold text-gray-700 mb-3">Cropped Result:</h2>
+             <div id="croppedResultContainer" class="mt-6 border border-gray-300 rounded-md p-4 min-h-[100px] flex items-center justify-center">
+                  <span id="croppedResultPlaceholder" class="text-gray-500 text-sm">No cropped image yet...</span>
+                 <div id="croppedResult"></div>
+             </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Get DOM elements
+        const fileInput = document.getElementById('fileInput');
+        const cropperContainer = document.getElementById('cropper-container');
+        const cropperImage = document.getElementById('cropperImage');
+        const cropButton = document.getElementById('cropButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const messageBox = document.getElementById('messageBox');
+        const croppedResultContainer = document.getElementById('croppedResultContainer');
+        const croppedResult = document.getElementById('croppedResult');
+        const croppedResultPlaceholder = document.getElementById('croppedResultPlaceholder');
+        const placeholderText = document.getElementById('placeholder-text');
+        const pdfNav = document.getElementById('pdfNav');
+        const prevPageButton = document.getElementById('prevPage');
+        const nextPageButton = document.getElementById('nextPage');
+        const pageInfo = document.getElementById('pageInfo');
+        const pageInput = document.getElementById('pageInput');
+        const totalPagesInfo = document.getElementById('totalPagesInfo');
+
+        // State variables
+        let cropperInstance = null;
+        let pdfDoc = null;
+        let currentPageNum = 1;
+        let totalPages = 1;
+        let currentRenderTask = null;
+        let currentCroppedDataUrl = null;
+        let messageTimeout = null;
+        let currentSourceIsPDF = false;
+
+        // --- Debounce Function ---
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => { clearTimeout(timeout); func(...args); };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // --- Event Listeners ---
+        fileInput.addEventListener('change', handleFileSelect);
+        cropButton.addEventListener('click', handleCrop);
+        downloadButton.addEventListener('click', handleDownload);
+        prevPageButton.addEventListener('click', goToPrevPage);
+        nextPageButton.addEventListener('click', goToNextPage);
+        pageInput.addEventListener('change', goToPageInput);
+        window.addEventListener('resize', debounce(handleResize, 300));
+        cropperContainer.addEventListener('dragenter', handleDragEnter);
+        cropperContainer.addEventListener('dragover', handleDragOver);
+        cropperContainer.addEventListener('dragleave', handleDragLeave);
+        cropperContainer.addEventListener('drop', handleDrop);
+
+        // --- Functions ---
+
+        function showMessage(text, type = 'info', duration = 3000) {
+             if (!messageBox) return;
+            clearTimeout(messageTimeout);
+            messageBox.textContent = text;
+            messageBox.className = ''; // Clear previous classes
+            messageBox.classList.add(`message-${type}`);
+            messageBox.style.display = 'block';
+            messageTimeout = setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, duration);
+        }
+
+        function handleResize() {
+            console.log("Window resized");
+            // Re-initializing Cropper on resize can be complex and might lose state.
+            // Cropper.js attempts to handle resize itself. Let's rely on that for now.
+        }
+
+        // --- Drag and Drop Handlers ---
+        function handleDragEnter(e) { e.preventDefault(); e.stopPropagation(); cropperContainer.classList.add('drag-over'); }
+        function handleDragOver(e) { e.preventDefault(); e.stopPropagation(); cropperContainer.classList.add('drag-over'); }
+        function handleDragLeave(e) { e.preventDefault(); e.stopPropagation(); if (e.target === cropperContainer) { cropperContainer.classList.remove('drag-over'); } }
+        function handleDrop(e) {
+            e.preventDefault(); e.stopPropagation(); cropperContainer.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.value = '';
+                processFile(files[0]);
+            } else { showMessage('Could not read dropped file.', 'error'); }
+        }
+
+        // --- File Processing Logic ---
+        function processFile(file) {
+             clearState();
+             if (!file) return;
+
+             if (file.type.startsWith('image/')) {
+                 currentSourceIsPDF = false;
+                 pdfNav.classList.add('hidden');
+                 const reader = new FileReader();
+                 reader.onload = (e) => {
+                     cropperImage.src = e.target.result;
+                     cropperImage.style.display = 'block';
+                     placeholderText.style.display = 'none';
+                     initializeCropper();
+                 };
+                 reader.onerror = () => { showMessage('Error reading image file.', 'error'); clearState(); };
+                 reader.readAsDataURL(file);
+
+             } else if (file.type === 'application/pdf') {
+                 currentSourceIsPDF = true;
+                 const reader = new FileReader();
+                 reader.onload = (e) => {
+                     const typedarray = new Uint8Array(e.target.result);
+                     showMessage('Loading PDF...', 'info', 5000);
+                     const loadingTask = pdfjsLib.getDocument({ data: typedarray });
+                     loadingTask.promise.then((pdf) => {
+                         pdfDoc = pdf;
+                         totalPages = pdf.numPages;
+                         currentPageNum = 1;
+                         pageInput.max = totalPages;
+                         totalPagesInfo.textContent = `of ${totalPages}`;
+                         renderPdfPageToCropper(currentPageNum);
+                         pdfNav.classList.remove('hidden');
+                     }, (reason) => {
+                         console.error(reason); showMessage('Error loading PDF file.', 'error'); clearState();
+                     });
+                 };
+                 reader.onerror = () => { showMessage('Error reading PDF file.', 'error'); clearState(); };
+                 reader.readAsArrayBuffer(file);
+             } else {
+                 showMessage('Unsupported file type. Please select an image or PDF.', 'error');
+                 clearState();
+             }
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            processFile(file);
+        }
+
+        // --- PDF Rendering (to feed Cropper.js) ---
+        function renderPdfPageToCropper(pageNum) {
+            if (!pdfDoc || pageNum < 1 || pageNum > totalPages) return;
+            if (currentRenderTask) { currentRenderTask.cancel(); }
+
+            currentPageNum = pageNum;
+            pageInput.value = currentPageNum;
+            enableButton(cropButton, false);
+            enableButton(downloadButton, false);
+            showMessage(`Loading page ${pageNum}...`, 'info', 2000);
+
+            pdfDoc.getPage(pageNum).then(page => {
+                const desiredScale = 1.5;
+                const viewport = page.getViewport({ scale: desiredScale });
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = viewport.width;
+                tempCanvas.height = viewport.height;
+
+                const renderContext = { canvasContext: tempCtx, viewport: viewport };
+                currentRenderTask = page.render(renderContext);
+
+                currentRenderTask.promise.then(() => {
+                    currentRenderTask = null;
+                    cropperImage.src = tempCanvas.toDataURL();
+                    cropperImage.style.display = 'block';
+                    placeholderText.style.display = 'none';
+                    initializeCropper(); // Re-initialize cropper with the new page image
+                    updatePdfNav();
+                }).catch(renderError => {
+                    if (renderError.name !== 'RenderingCancelledException') {
+                        console.error("PDF Render Error:", renderError);
+                        showMessage(`Error rendering page ${pageNum}.`, 'error');
+                    }
+                    currentRenderTask = null;
+                    updatePdfNav();
+                });
+            }).catch(pageError => {
+                console.error("PDF GetPage Error:", pageError);
+                showMessage(`Error getting page ${pageNum}.`, 'error');
+                updatePdfNav();
+            });
+        }
+
+
+        // --- Cropper.js Initialization ---
+        function initializeCropper() {
+            if (cropperInstance) {
+                cropperInstance.destroy();
+                cropperInstance = null;
+            }
+            setTimeout(() => {
+                if (!cropperImage.src || cropperImage.src === window.location.href) {
+                     console.error("Image src not set before Cropper initialization.");
+                     showMessage("Error preparing image for cropping.", "error");
+                     return;
+                 }
+                 cropperImage.classList.remove('loaded');
+
+                cropperInstance = new Cropper(cropperImage, {
+                    viewMode: 1,
+                    dragMode: 'crop', // Change drag mode to 'crop' initially
+                    autoCrop: false, // ** Do not autocrop initially **
+                    // autoCropArea: 0.8, // Remove this line
+                    zoomable: true,
+                    scalable: false,
+                    movable: true,
+                    background: false,
+                    checkOrientation: false,
+                    // Event when user starts dragging to create crop box
+                    cropstart: function (event) {
+                        // Can potentially enable crop button earlier here if needed
+                        console.log('Crop start');
+                    },
+                    // Event when crop box is created or moved/resized
+                    crop: function(event) {
+                        // Enable crop button only when a valid crop box exists
+                        // Check if width and height are non-zero
+                        if (event.detail.width > 0 && event.detail.height > 0) {
+                             enableButton(cropButton, true);
+                        } else {
+                             enableButton(cropButton, false);
+                        }
+                    },
+                    ready() {
+                        console.log("Cropper is ready.");
+                        cropperImage.classList.add('loaded');
+                        // Crop button initially disabled as autoCrop is false
+                        enableButton(cropButton, false);
+                        enableButton(downloadButton, false);
+                        clearResultOnly();
+                    },
+                     zoom(event) {
+                         console.log(`Zoom event: ratio=${event.detail.ratio}`);
+                     }
+                });
+            }, 50);
+        }
+
+
+        // --- PDF Navigation ---
+        function updatePdfNav() {
+             if (!pdfDoc) return;
+            pageInfo.textContent = `Page`;
+            pageInput.value = currentPageNum;
+            totalPagesInfo.textContent = `of ${totalPages}`;
+            pageInput.max = totalPages;
+            enableButton(prevPageButton, currentPageNum > 1);
+            enableButton(nextPageButton, currentPageNum < totalPages);
+        }
+        function goToPrevPage() {
+            if (currentPageNum <= 1) return;
+            renderPdfPageToCropper(currentPageNum - 1);
+        }
+        function goToNextPage() {
+             if (currentPageNum >= totalPages) return;
+             renderPdfPageToCropper(currentPageNum + 1);
+        }
+        function goToPageInput() {
+             const targetPage = parseInt(pageInput.value, 10);
+             if (!isNaN(targetPage) && targetPage >= 1 && targetPage <= totalPages && targetPage !== currentPageNum) {
+                 renderPdfPageToCropper(targetPage);
+             } else {
+                 pageInput.value = currentPageNum;
+             }
+        }
+
+
+        // --- Cropping and Downloading ---
+        function handleCrop() {
+            if (!cropperInstance) {
+                showMessage('Cropper not initialized.', 'error');
+                return;
+            }
+             // Check if a crop box has been drawn
+             const cropBoxData = cropperInstance.getData(true); // Get rounded data
+             if (!cropBoxData || cropBoxData.width <= 0 || cropBoxData.height <= 0) {
+                 showMessage('Please draw a crop area first.', 'info');
+                 return;
+             }
+
+            try {
+                const croppedCanvas = cropperInstance.getCroppedCanvas({
+                    imageSmoothingEnabled: true,
+                    imageSmoothingQuality: 'high',
+                });
+
+                if (!croppedCanvas) {
+                     showMessage('Could not get cropped canvas.', 'error');
+                     return;
+                }
+                currentCroppedDataUrl = croppedCanvas.toDataURL('image/png');
+                croppedResult.innerHTML = `<img src="${currentCroppedDataUrl}" alt="Cropped Output" class="max-w-full h-auto">`;
+                croppedResultPlaceholder.style.display = 'none';
+                enableButton(downloadButton, true);
+                showMessage('Area cropped successfully.', 'success');
+
+            } catch (error) {
+                 console.error("Cropping error:", error);
+                 showMessage('Error occurred during cropping.', 'error');
+                 enableButton(downloadButton, false);
+                 clearResultOnly();
+            }
+        }
+
+        function handleDownload() {
+             if (!currentCroppedDataUrl) {
+                showMessage('No cropped image available to download.', 'error');
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = currentCroppedDataUrl;
+            const originalFileName = fileInput.files[0]?.name || (currentSourceIsPDF ? `page_${currentPageNum}` : 'cropped');
+            const baseName = originalFileName.substring(0, originalFileName.lastIndexOf('.')) || originalFileName;
+            link.download = `${baseName}_cropped.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showMessage('Download started.', 'info');
+        }
+
+        // --- Utility Functions ---
+        function enableButton(button, enabled) {
+            if (!button) return;
+            button.disabled = !enabled;
+        }
+        function clearSelectionAndResult() {
+            // Cropper handles its own selection state, just clear our result
+            clearResultOnly();
+        }
+        function clearResultOnly() {
+             if (croppedResult) croppedResult.innerHTML = '';
+             if (croppedResultPlaceholder) croppedResultPlaceholder.style.display = 'block';
+             currentCroppedDataUrl = null;
+        }
+        function clearState() {
+            if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
+            if (cropperImage) { cropperImage.src = '#'; cropperImage.style.display = 'none'; cropperImage.classList.remove('loaded'); }
+            if (placeholderText) placeholderText.style.display = 'flex';
+            pdfDoc = null; currentPageNum = 1; totalPages = 1;
+            if (pdfNav) pdfNav.classList.add('hidden');
+            enableButton(prevPageButton, false); enableButton(nextPageButton, false);
+            if (pageInput) pageInput.value = 1;
+            if (totalPagesInfo) totalPagesInfo.textContent = 'of 1';
+            clearSelectionAndResult();
+            enableButton(cropButton, false); enableButton(downloadButton, false);
+            clearTimeout(messageTimeout); if(messageBox) messageBox.style.display = 'none';
+            if(cropperContainer) cropperContainer.classList.remove('drag-over');
+            currentSourceIsPDF = false;
+        }
+
+        // Initial setup
+        clearState();
+
+    </script>
+
+</body>
+</html>
