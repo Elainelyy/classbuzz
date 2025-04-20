@@ -50,20 +50,9 @@ app.use(cors());
 // Enable Express to parse JSON request bodies with increased size limit
 app.use(express.json({ limit: '10mb' }));
 
-// Serve static files with proper MIME types
-app.use(express.static(__dirname, {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    } else if (path.endsWith('.mjs')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    } else if (path.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css');
-    } else if (path.endsWith('.html')) {
-      res.setHeader('Content-Type', 'text/html');
-    }
-  }
-}));
+const path = require('path'); // Make sure to require 'path' at the top
+// Serve static files ONLY from the 'public' directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- API Endpoints ---
 
