@@ -23,20 +23,16 @@
     
     <!-- Import our styles -->
     <link rel="stylesheet" href="/styles/main.css">
-    
-    <!-- Import our API clients -->
-    <script type="module" src="/scripts/api/pollApi.js"></script>
-    <script type="module" src="/scripts/api/questionApi.js"></script>
 </head>
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script type="text/babel">
+    <script type="text/babel" data-type="module">
       const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
       // Import API clients
-      import pollApi from '/scripts/api/pollApi.js';
-      import questionApi from '/scripts/api/questionApi.js';
+      import { pollApi } from './scripts/api/pollApi.js';
+      import { questionApi } from './scripts/api/questionApi.js';
 
       // --- Utility Functions ---
       function classNames(...classes) { return classes.filter(Boolean).join(' '); }
