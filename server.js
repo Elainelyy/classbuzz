@@ -49,9 +49,15 @@ const upload = multer({
 app.use(cors());
 // Enable Express to parse JSON request bodies with increased size limit
 app.use(express.json({ limit: '10mb' }));
-// Serve static files (like the main HTML) from the current directory
-// This will automatically serve index.html from the root path '/'
-app.use(express.static(__dirname));
+
+// Serve static files with proper MIME types
+app.use(express.static(__dirname, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
 
 // --- API Endpoints ---
 
