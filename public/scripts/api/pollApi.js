@@ -97,4 +97,4 @@ const pollApi = {
   }
 };
 
-export default pollApi; 
+export { pollApi }; 

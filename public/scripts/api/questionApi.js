@@ -81,4 +81,4 @@ const questionApi = {
   }
 };
 
-export default questionApi; 
+export { questionApi }; 
