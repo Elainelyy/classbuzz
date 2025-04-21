@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+const React = window.React;
+const { useState } = React;
 import classNames from '../utils/classNames.js';
 import Comment from './Comment.js';
 

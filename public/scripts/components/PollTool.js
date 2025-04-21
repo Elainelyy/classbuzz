@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+const React = window.React;
+const { useState, useEffect, useCallback, useMemo } = React;
 import { pollApi } from '../api/pollApi.js';
 import classNames from '../utils/classNames.js';
 import PollEditor from './PollEditor.js';

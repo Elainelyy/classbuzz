@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+const React = window.React;
+const { useState, useEffect, useCallback, useMemo } = React;
 import { questionApi } from '../api/questionApi.js';
 import Question from './Question.js';
 
@@ -110,7 +111,7 @@ export default function RaiseHandTool({ onGoBack }) {
       await questionApi.markQuestionAnswered(questionId);
     } catch (e) {
       console.error("Failed to toggle answer status:", e);
-      setError(`Update failed: ${e.message}`);
+      setError(`Failed to toggle answer status: ${e.message}`);
       setQuestions(originalQuestions);
     }
   }, [isSpeaker, questions]); // Include questions for revert, isSpeaker for check
@@ -173,4 +174,4 @@ export default function RaiseHandTool({ onGoBack }) {
        </div>
     </div>
   );
-} 
+}

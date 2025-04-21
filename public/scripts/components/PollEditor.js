@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+const React = window.React;
+const { useState, useEffect, useRef } = React;
 
 // Assume Cropper and pdfjsLib are available globally from the script tags in index.html
 

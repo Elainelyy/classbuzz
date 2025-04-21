@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+const React = window.React;
+const { useState } = React;
 import ToolList from './ToolList.js';
 import RaiseHandTool from './RaiseHandTool.js';
 import PollTool from './PollTool.js';

@@ -1,4 +1,4 @@
-import React from 'react';
+const React = window.React;
 
 export default function Comment({ comment }) {
   return (
