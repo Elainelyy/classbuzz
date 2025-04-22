@@ -1,4 +1,5 @@
-import { Pool } from 'pg';
+import pg from 'pg'; // Import the default export (module.exports object)
+const { Pool } = pg; // Destructure Pool from the imported object
 
 // Create a connection pool using the DATABASE_URL environment variable
 // Heroku automatically sets DATABASE_URL. For local development, you'll need to set it.
