@@ -1,4 +1,4 @@
-const { Pool } = require('pg'); // Import PostgreSQL client
+import { Pool } from 'pg';
 
 // Create a connection pool using the DATABASE_URL environment variable
 // Heroku automatically sets DATABASE_URL. For local development, you'll need to set it.
@@ -31,7 +31,7 @@ async function getAllQuestions() {
     ORDER BY q.is_answered ASC, q.votes DESC, q.created_at ASC
   `;
   const result = await pool.query(query);
-  
+
   // Process the results to ensure comments is always an array
   return result.rows.map(q => ({
     ...q,
@@ -122,7 +122,7 @@ async function updatePollStatus(pollId, status) {
 const updatePoll = async (id, { question, options, poll_type, image_url }) => {
   // For open_ended polls, options should be NULL
   const pollOptions = poll_type === 'open_ended' ? null : options;
-  
+
   const result = await pool.query(
     `UPDATE polls 
      SET question = $1, 
@@ -133,11 +133,11 @@ const updatePoll = async (id, { question, options, poll_type, image_url }) => {
      RETURNING id, question, options, poll_type, poll_status, image_url, created_at`,
     [question, pollOptions, poll_type, id, image_url]
   );
-  
+
   if (result.rows.length === 0) {
     throw new Error('Poll not found');
   }
-  
+
   return result.rows[0];
 };
 
@@ -147,14 +147,14 @@ async function deletePoll(pollId) {
   try {
     // Delete poll votes
     await pool.query('DELETE FROM poll_votes WHERE poll_id = $1', [pollId]);
-    
+
     // Delete open answers
     await pool.query('DELETE FROM poll_open_answers WHERE poll_id = $1', [pollId]);
-    
+
     // Delete the poll itself
     const query = 'DELETE FROM polls WHERE id = $1 RETURNING id';
     const result = await pool.query(query, [pollId]);
-    
+
     // Return true if a poll was deleted
     return result.rowCount > 0;
   } catch (error) {
@@ -204,7 +204,7 @@ async function getOpenAnswers(pollId) {
 }
 
 // Export the new functions
-module.exports = {
+export {
   // ... existing exports ...
   createPoll,
   getPollById,
