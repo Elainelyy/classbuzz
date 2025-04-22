@@ -1,9 +1,8 @@
-// Import necessary modules using ES Module syntax
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
-import db from './db.js'; // Assuming db.js uses export
+import * as db from './db.js';
 import multer from 'multer';
 import fs from 'fs';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
