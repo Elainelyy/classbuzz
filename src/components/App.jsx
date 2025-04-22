@@ -1,8 +1,7 @@
-const React = window.React;
-const { useState } = React;
-import ToolList from './ToolList.js';
-import RaiseHandTool from './RaiseHandTool.js';
-import PollTool from './PollTool.js';
+import React, { useState } from 'react';
+import ToolList from './ToolList.jsx';
+import RaiseHandTool from './RaiseHandTool.jsx';
+import PollTool from './PollTool.jsx';
 
 export default function App() {
   const [currentTool, setCurrentTool] = useState(null);
@@ -11,6 +10,7 @@ export default function App() {
     if (toolId === 'raise-hand' || toolId === 'poll') {
       setCurrentTool(toolId);
     } else {
+      console.warn(`Tool "${toolId}" is not yet implemented.`);
       alert(`Tool "${toolId}" is not yet implemented.`);
     }
   };

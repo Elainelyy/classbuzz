@@ -1,7 +1,6 @@
-const React = window.React;
-const { useState, useEffect, useCallback, useMemo } = React;
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { questionApi } from '../api/questionApi.js';
-import Question from './Question.js';
+import Question from './Question.jsx';
 
 export default function RaiseHandTool({ onGoBack }) {
   const [questions, setQuestions] = useState([]);

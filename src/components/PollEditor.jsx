@@ -1,7 +1,25 @@
-const React = window.React;
-const { useState, useEffect, useRef } = React;
+import React, { useState, useEffect, useRef } from 'react';
 
-// Assume Cropper and pdfjsLib are available globally from the script tags in index.html
+// Import CropperJS
+import Cropper from 'cropperjs'; 
+import 'cropperjs/dist/cropper.css'; // Import Cropper CSS
+
+// Import PDF.js
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+// Use vite-plugin-static-copy or configure manually if worker doesn't load automatically
+// For development, Vite often handles this, but for build, you might need config.
+// See: https://vitejs.dev/guide/assets.html#importing-asset-as-url
+// Or: https://github.com/vitejs/vite/discussions/4974
+try {
+  // Attempt to set workerSrc using standard import URL (might work with newer Vite/pdfjs-dist)
+  const pdfWorkerUrl = new URL('pdfjs-dist/build/pdf.worker.js', import.meta.url).toString();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+} catch (e) {
+  // Fallback or more robust worker loading mechanism might be needed for production builds
+  console.warn('Could not automatically set pdf.worker.js source. Manual configuration might be needed for build.', e);
+  // Example fallback (less ideal):
+  // pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
+}
 
 export default function PollEditor({ poll, onSave, onCancel }) {
     // --- State Management ---
@@ -51,11 +69,7 @@ export default function PollEditor({ poll, onSave, onCancel }) {
 
     // Function to initialize CropperJS
     const initializeCropper = () => {
-      if (typeof Cropper === 'undefined') {
-        console.error("CropperJS is not loaded");
-        setError("Image cropping library failed to load. Please refresh.");
-        return;
-      }
+      // No need to check for global Cropper anymore
       // Destroy previous instance if it exists
       if (cropperInstanceRef.current) {
         cropperInstanceRef.current.destroy();
@@ -101,11 +115,6 @@ export default function PollEditor({ poll, onSave, onCancel }) {
     // PDF Page Rendering
     const renderPdfPage = async (pdfDocument, pageNum) => {
       if (!pdfDocument || isRenderingPdf) return;
-      if (typeof pdfjsLib === 'undefined') {
-        console.error("PDF.js is not loaded");
-        setError("PDF rendering library failed to load. Please refresh.");
-        return;
-      }
       setIsRenderingPdf(true);
       setError(null); // Clear previous errors
 
@@ -173,14 +182,11 @@ export default function PollEditor({ poll, onSave, onCancel }) {
       setFileType(file.type);
 
       if (file.type === 'application/pdf') {
-        if (!window.pdfjsLib) {
-          setError("PDF library not available.");
-          return;
-        }
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            const loadingTask = window.pdfjsLib.getDocument({ data: event.target.result });
+            // Use the imported pdfjsLib
+            const loadingTask = pdfjsLib.getDocument({ data: event.target.result });
             const pdf = await loadingTask.promise;
             setPdfDoc(pdf);
             setTotalPages(pdf.numPages);

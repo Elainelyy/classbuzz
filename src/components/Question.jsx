@@ -1,7 +1,6 @@
-const React = window.React;
-const { useState } = React;
+import React, { useState } from 'react';
 import classNames from '../utils/classNames.js';
-import Comment from './Comment.js';
+import Comment from './Comment.jsx';
 
 export default function Question({ question, onVote, onAddComment, onToggleAnswer, isSpeaker }) {
   const [showComments, setShowComments] = useState(false);
