@@ -10,6 +10,29 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
+// User-related functions
+async function isUserSpeaker(userId) {
+  // Define the SQL query to select the is_speaker flag for the given user ID
+  const query = `
+    SELECT is_speaker 
+    FROM users 
+    WHERE id = $1;
+  `;
+
+  try {
+    const result = await pool.query(query, [userId]);
+
+    // Check if a user row was found
+    if (result.rows.length === 0) {
+      return false;
+    }
+    return result.rows[0].is_speaker;
+  } catch (error) {
+    console.error(`Error checking speaker status for user ${userId}:`, error);
+    return false;
+  }
+}
+
 // Question-related functions
 async function getAllQuestions() {
   const query = `

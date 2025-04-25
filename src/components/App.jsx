@@ -15,10 +15,8 @@ export default function App() {
     async function checkSpeakerStatus() {
       if (isAuthenticated && user) {
         try {
-          // Get the access token from Auth0
           const token = await getAccessTokenSilently();
           
-          // Call the API with the token
           const response = await fetch('/api/user/speaker', {
             headers: {
               Authorization: `Bearer ${token}`
