@@ -67,6 +67,27 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // --- API Endpoints ---
+// Check if user is a speaker
+app.get('/api/user/speaker', checkJwt, async (req, res) => {
+  try {
+    // Extract the Auth0 User ID from the validated token payload
+    // The 'sub' claim is the standard identifier for the user subject
+    const userId = req.auth.payload.sub;
+    console.log('userId', userId);
+    console.log('req.auth', req.auth.payload);
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found in token.' });
+    }
+
+    const isSpeaker = await db.isUserSpeaker(userId);
+    res.json({ isSpeaker: isSpeaker });
+  } catch (error) {
+    // Handle potential errors during database lookup
+    console.error('Error fetching user role:', error);
+    res.status(500).json({ error: 'Failed to determine user role.' });
+  }
+});
+
 // GET /api/questions - Fetch all questions
 app.get('/api/questions', async (req, res) => {
   try {
@@ -235,43 +256,43 @@ app.patch('/api/polls/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { question, options, poll_type, imageDataUrl, existingImageUrl } = req.body;
-    
+
     if (!question && !imageDataUrl && !existingImageUrl) {
       return res.status(400).json({ error: 'Either question or image must be provided' });
     }
     if (!poll_type) {
       return res.status(400).json({ error: 'Poll type is required' });
     }
-    
+
     // Validate poll_type
     if (!['single_choice', 'multiple_choice', 'open_ended'].includes(poll_type)) {
       return res.status(400).json({ error: 'Invalid poll type' });
     }
-    
+
     // For non-open-ended polls, validate options
     if (poll_type !== 'open_ended' && (!options || options.length < 2)) {
       return res.status(400).json({ error: 'Non-open-ended polls require at least two options' });
     }
-    
+
     // Get existing poll to check if we need to delete old image
     const existingPoll = await db.getPollById(id);
     if (!existingPoll) {
       return res.status(404).json({ error: 'Poll not found' });
     }
-    
+
     let image_url = existingImageUrl;
-    
+
     // Process image data URL if provided (upload to S3)
     if (imageDataUrl) {
       try {
         console.log('Processing image data URL for S3 upload (update)');
-        
+
         // Extract the base64 data
         const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const fileName = `polls/${Date.now()}-${Math.random().toString(36).substring(2)}.jpg`;
         const contentType = imageDataUrl.match(/^data:(.*?);/)[1] || 'image/jpeg';
-        
+
         // Upload to S3
         const command = new PutObjectCommand({
           Bucket: process.env.AWS_S3_BUCKET_NAME,
@@ -279,10 +300,10 @@ app.patch('/api/polls/:id', async (req, res) => {
           Body: buffer,
           ContentType: contentType
         });
-        
+
         await s3Client.send(command);
         console.log('S3 upload successful for updated poll image');
-        
+
         // Construct the S3 URL
         image_url = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import ToolList from './ToolList.jsx';
 import RaiseHandTool from './RaiseHandTool.jsx';
@@ -7,7 +7,39 @@ import LoginButton from './LoginButton.jsx';
 
 export default function App() {
   const [currentTool, setCurrentTool] = useState(null);
-  const { isAuthenticated, isLoading, user, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading, user, loginWithRedirect, getAccessTokenSilently } = useAuth0();
+  const [isSpeaker, setIsSpeaker] = useState(false);
+
+  // Check speaker status when user authenticates
+  useEffect(() => {
+    async function checkSpeakerStatus() {
+      if (isAuthenticated && user) {
+        try {
+          // Get the access token from Auth0
+          const token = await getAccessTokenSilently();
+          
+          // Call the API with the token
+          const response = await fetch('/api/user/speaker', {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          setIsSpeaker(data.isSpeaker);
+        } catch (error) {
+          console.error('Error checking speaker status:', error);
+          setIsSpeaker(false); // Default to false on error
+        }
+      }
+    }
+    
+    checkSpeakerStatus();
+  }, [isAuthenticated, user, getAccessTokenSilently]);
 
   const handleSelectTool = (toolId) => {
     if (toolId === 'raise-hand' || toolId === 'poll') {
@@ -26,9 +58,6 @@ export default function App() {
   if (isLoading) {
     return <div className="message-box loading">Loading authentication...</div>;
   }
-
-  // Determine if user is a speaker (for future use)
-  const isSpeaker = isAuthenticated ? checkIfUserIsSpeaker(user) : false;
 
   // App content based on selected tool
   const renderContent = () => {
@@ -49,31 +78,22 @@ export default function App() {
         <h1>ClassBuzz Tools</h1>
         <LoginButton />
       </header>
-      
+
       <div className="app-content">
         {isAuthenticated && (
           <div className="user-status-banner">
             Logged in as: {user.name} {isSpeaker ? '(Speaker)' : '(Guest)'}
           </div>
         )}
-        
+
         {!isAuthenticated && (
           <div className="guest-banner">
             You are viewing as a guest. <button className="login-link" onClick={() => loginWithRedirect()}>Log in</button> for additional features.
           </div>
         )}
-        
+
         {renderContent()}
       </div>
     </div>
   );
-}
-
-// Helper function to determine if a user is a speaker (placeholder for future implementation)
-function checkIfUserIsSpeaker(user) {
-  // This is a placeholder. In the future, you might:
-  // - Check against a list of speaker email domains
-  // - Verify roles in the user's Auth0 profile
-  // - Make an API call to check if this user ID is registered as a speaker
-  return false; // Default to false for now
 } 
