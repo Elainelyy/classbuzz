@@ -6,6 +6,14 @@ import * as db from './db.js';
 import multer from 'multer';
 import fs from 'fs';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { auth } from 'express-oauth2-jwt-bearer';
+
+// Configure Auth0 JWT middleware
+const checkJwt = auth({
+  audience: 'https://api.classbuzz.com',
+  issuerBaseURL: 'https://dev-0hou552bxbe8cst4.us.auth0.com/',
+  tokenSigningAlg: 'RS256'
+});
 
 // Derive __dirname equivalent in ES Modules
 const __filename = fileURLToPath(import.meta.url);

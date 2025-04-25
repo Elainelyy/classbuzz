@@ -15,7 +15,12 @@ export default function App() {
     async function checkSpeakerStatus() {
       if (isAuthenticated && user) {
         try {
-          const token = await getAccessTokenSilently();
+          const token = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: 'https://api.classbuzz.com',
+              scope: 'read:profile'
+            }
+          });
           
           const response = await fetch('/api/user/speaker', {
             headers: {
