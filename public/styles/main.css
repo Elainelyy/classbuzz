@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities; 
@@ -9,7 +11,65 @@ body {
     background-color: #f9fafb;
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Authentication styles */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #4338ca;
+}
+
+.login-button, .logout-button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.login-button {
+  background-color: #4338ca;
+  color: white;
+}
+
+.login-button:hover {
+  background-color: #3730a3;
+}
+
+.logout-button {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.logout-button:hover {
+  background-color: #e5e7eb;
+}
+
+.loading-button {
+  padding: 0.5rem 1rem;
+  color: #4b5563;
+}
+
+.auth-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-info {
+  font-size: 0.875rem;
+  color: #4b5563;
+}
 
 /* Common styles */
 .dot {
@@ -437,4 +497,50 @@ body {
 
 .max-h-300px {
     max-height: 300px;
+}
+
+/* App container styles */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-content {
+  flex: 1;
+  padding: 1rem;
+}
+
+.user-status-banner, .guest-banner {
+  margin-bottom: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.user-status-banner {
+  background-color: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.guest-banner {
+  background-color: #e0e7ff;
+  color: #3730a3;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.login-link {
+  background: none;
+  border: none;
+  color: #4338ca;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.login-link:hover {
+  color: #3730a3;
 }

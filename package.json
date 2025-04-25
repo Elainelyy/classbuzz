@@ -13,6 +13,7 @@
     "heroku-postbuild": "npm run build -- --debug"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.3.0",
     "@aws-sdk/client-s3": "^3.787.0",
     "@aws-sdk/s3-request-presigner": "^3.787.0",
     "@vitejs/plugin-react": "^4.2.1",
